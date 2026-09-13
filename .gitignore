@@ -1,0 +1,56 @@
+# Personal & temporary notes
+note.txt
+WALKTHROUGH.md
+
+# OS generated files
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.iws
+*.iml
+*.ipr
+*.swp
+*.swo
+*~
+
+# Java / Maven (Backend)
+**/target/
+!**/src/main/**/target/
+!**/src/test/**/target/
+**/.mvn/wrapper/maven-wrapper.jar
+**/.apt_generated
+**/.classpath
+**/.factorypath
+**/.project
+**/.settings
+**/.springBeans
+**/.sts4-cache
+
+# Logs
+*.log
+logs/
+**/logs/
+
+# Frontend / Node (phòng khi dùng npm/build)
+node_modules/
+dist/
+build/
+
+# Environment / Secrets (nếu có sau này)
+.env
+.env.local
+.env.*.local
+
+
+report/
