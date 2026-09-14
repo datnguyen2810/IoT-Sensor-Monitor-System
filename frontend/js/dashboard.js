@@ -171,22 +171,22 @@ async function loadInitialChartData() {
     console.warn('Backend offline, sử dụng dữ liệu mẫu cho biểu đồ:', error.message);
     // Dữ liệu mẫu khớp với hình thiết kế khi backend chưa bật
     const mockPoints = [
-      { time: "17:15:00", temperature: 35.0, humidity: 55, light: 710 },
-      { time: "17:16:00", temperature: 35.2, humidity: 54, light: 715 },
-      { time: "17:17:00", temperature: 35.4, humidity: 55, light: 720 },
-      { time: "17:18:00", temperature: 35.5, humidity: 56, light: 718 },
-      { time: "17:19:00", temperature: 35.6, humidity: 55, light: 712 },
-      { time: "17:20:00", temperature: 35.5, humidity: 55, light: 705 },
-      { time: "17:21:00", temperature: 35.4, humidity: 56, light: 698 },
-      { time: "17:22:00", temperature: 35.3, humidity: 57, light: 690 },
-      { time: "17:23:00", temperature: 35.4, humidity: 56, light: 695 },
-      { time: "17:24:00", temperature: 35.5, humidity: 55, light: 708 },
-      { time: "17:25:00", temperature: 35.6, humidity: 55, light: 720 },
-      { time: "17:26:00", temperature: 35.7, humidity: 54, light: 728 },
-      { time: "17:27:00", temperature: 35.6, humidity: 55, light: 734 }
+      { time: "17:15:00", temperature: 35.0, humidity: 55, light: 510 },
+      { time: "17:16:00", temperature: 35.2, humidity: 54, light: 515 },
+      { time: "17:17:00", temperature: 35.4, humidity: 55, light: 520 },
+      { time: "17:18:00", temperature: 35.5, humidity: 56, light: 518 },
+      { time: "17:19:00", temperature: 35.6, humidity: 55, light: 512 },
+      { time: "17:20:00", temperature: 35.5, humidity: 55, light: 505 },
+      { time: "17:21:00", temperature: 35.4, humidity: 56, light: 498 },
+      { time: "17:22:00", temperature: 35.3, humidity: 57, light: 490 },
+      { time: "17:23:00", temperature: 35.4, humidity: 56, light: 495 },
+      { time: "17:24:00", temperature: 35.5, humidity: 55, light: 508 },
+      { time: "17:25:00", temperature: 35.6, humidity: 55, light: 520 },
+      { time: "17:26:00", temperature: 35.7, humidity: 54, light: 528 },
+      { time: "17:27:00", temperature: 35.6, humidity: 55, light: 534 }
     ];
     initChart(mockPoints);
-    updateSensorCards(35.6, 734, 55);
+    updateSensorCards(35.6, 534, 55);
   }
 }
 

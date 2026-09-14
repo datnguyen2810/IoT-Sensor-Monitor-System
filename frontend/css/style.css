@@ -373,6 +373,7 @@ body.login-body {
   height: 38px;
   border-radius: 50%;
   object-fit: cover;
+  object-position: center 15%;
   border: 2px solid #FFFFFF;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
