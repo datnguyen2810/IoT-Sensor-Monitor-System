@@ -9,7 +9,7 @@
 <body>
 
   <div class="app-container">
-    <!-- Sidebar cố định bên trái -->
+    <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-brand">
         <a href="dashboard.html" class="sidebar-logo">IOT</a>
@@ -51,7 +51,6 @@
       </ul>
     </aside>
 
-    <!-- Khu vực nội dung chính -->
     <main class="main-content">
       <!-- Top Header -->
       <header class="top-header">
@@ -81,7 +80,7 @@
         </div>
       </header>
 
-      <!-- Khung bảng dữ liệu & Thanh công cụ -->
+      <!-- Khung bảng dữ liệu và Thanh công cụ -->
       <div class="data-card">
         <!-- Toolbar lọc và tìm kiếm -->
         <div class="toolbar">
@@ -94,8 +93,8 @@
               <option value="Ánh Sáng">Ánh Sáng</option>
             </select>
 
-            <!-- Ô nhập tìm kiếm linh hoạt theo thời gian -->
-            <input type="text" id="timeSearchInput" class="filter-input" placeholder="YYYY-MM-DD (hoặc HH:mm)">
+            <!-- Ô nhập tìm kiếm theo thời gian -->
+            <input type="text" id="timeSearchInput" class="filter-input" placeholder="Nhập thời gian">
 
             <!-- Nút bấm Tìm kiếm -->
             <button id="btnSearch" class="btn-search">
@@ -106,7 +105,7 @@
             </button>
           </div>
 
-          <!-- Dropdown sắp xếp góc trên bên phải -->
+          <!-- Dropdown sắp xếp -->
           <div class="toolbar-right">
             <select id="sortOrder" class="filter-select">
               <option value="desc" selected>Giảm dần</option>
@@ -115,7 +114,7 @@
           </div>
         </div>
 
-        <!-- Bảng dữ liệu 4 cột -->
+        <!-- Bảng dữ liệu -->
         <div class="table-responsive">
           <table class="iot-table">
             <thead>
@@ -135,7 +134,7 @@
           </table>
         </div>
 
-        <!-- Thanh phân trang (Pagination) -->
+        <!-- Thanh phân trang -->
         <div class="pagination-container" id="pagination">
           <!-- Các nút phân trang được tạo động -->
         </div>

@@ -51,12 +51,12 @@
           <span id="btnText">ĐĂNG NHẬP</span>
         </button>
 
-        <div style="margin-top: 18px; font-size: 13px; color: var(--text-muted);">
+        <!-- <div style="margin-top: 18px; font-size: 13px; color: var(--text-muted);">
           Chưa bật Backend? 
           <a href="#" id="btnDemoMode" style="color: var(--primary); font-weight: 700; text-decoration: underline;">
             Xem nhanh giao diện (Demo Mode)
           </a>
-        </div>
+        </div> -->
       </form>
     </div>
   </div>
@@ -120,21 +120,21 @@
       });
 
       // Xử lý nút Xem nhanh giao diện Demo
-      const btnDemoMode = document.getElementById('btnDemoMode');
-      if (btnDemoMode) {
-        btnDemoMode.addEventListener('click', (e) => {
-          e.preventDefault();
-          localStorage.setItem('iot_auth_token', 'demo_token_preview_2026');
-          localStorage.setItem('iot_user_info', JSON.stringify({
-            name: 'Nguyễn Xuân Đạt',
-            username: 'admin'
-          }));
-          showToast('Đã vào chế độ Xem thử giao diện!', 'success');
-          setTimeout(() => {
-            window.location.href = 'dashboard.html';
-          }, 400);
-        });
-      }
+      // const btnDemoMode = document.getElementById('btnDemoMode');
+      // if (btnDemoMode) {
+      //   btnDemoMode.addEventListener('click', (e) => {
+      //     e.preventDefault();
+      //     localStorage.setItem('iot_auth_token', 'demo_token_preview_2026');
+      //     localStorage.setItem('iot_user_info', JSON.stringify({
+      //       name: 'Nguyễn Xuân Đạt',
+      //       username: 'admin'
+      //     }));
+      //     showToast('Đã vào chế độ Xem thử giao diện!', 'success');
+      //     setTimeout(() => {
+      //       window.location.href = 'dashboard.html';
+      //     }, 400);
+      //   });
+      // }
     });
   </script>
 </body>

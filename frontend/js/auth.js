@@ -1,5 +1,5 @@
 /**
- * auth.js - IoT Sensor Monitor System
+ * auth.js
  * Quản lý phiên đăng nhập, Auth Guard và Đăng xuất
  */
 
@@ -17,9 +17,8 @@ const Auth = {
     return true;
   },
 
-  /**
-   * Kiểm tra nếu đã đăng nhập thì tự động chuyển vào dashboard.html (dùng cho index.html)
-   */
+  
+  // Kiểm tra nếu đã đăng nhập thì tự động chuyển vào dashboard.html (dùng cho index.html)
   redirectIfAuthenticated() {
     const token = localStorage.getItem(API_CONFIG.TOKEN_KEY);
     if (token) {

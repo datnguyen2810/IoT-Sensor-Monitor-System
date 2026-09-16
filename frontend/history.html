@@ -9,7 +9,7 @@
 <body>
 
   <div class="app-container">
-    <!-- Sidebar cố định bên trái -->
+    <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-brand">
         <a href="dashboard.html" class="sidebar-logo">IOT</a>
@@ -51,7 +51,6 @@
       </ul>
     </aside>
 
-    <!-- Khu vực nội dung chính -->
     <main class="main-content">
       <!-- Top Header -->
       <header class="top-header">
@@ -88,7 +87,7 @@
           <div class="toolbar-left">
             <!-- Dropdown chọn thiết bị -->
             <select id="deviceFilter" class="filter-select">
-              <option value="">Thiết Bị *</option>
+              <option value="">Thiết Bị</option>
               <option value="Đèn LED">Đèn LED</option>
               <option value="Quạt">Quạt</option>
               <option value="Điều hoà">Điều hoà</option>
@@ -96,13 +95,13 @@
 
             <!-- Dropdown chọn trạng thái -->
             <select id="statusFilter" class="filter-select">
-              <option value="">Trạng Thái *</option>
+              <option value="">Trạng Thái</option>
               <option value="ON">ON</option>
               <option value="OFF">OFF</option>
             </select>
 
             <!-- Ô nhập tìm kiếm thời gian -->
-            <input type="text" id="timeSearchInput" class="filter-input" placeholder="2026-08-16 (hoặc HH:mm)">
+            <input type="text" id="timeSearchInput" class="filter-input" placeholder="Nhập thời gian">
 
             <!-- Nút bấm Tìm kiếm -->
             <button id="btnSearch" class="btn-search">
@@ -113,7 +112,7 @@
             </button>
           </div>
 
-          <!-- Dropdown sắp xếp góc trên bên phải -->
+          <!-- Dropdown sắp xếp -->
           <div class="toolbar-right">
             <select id="sortOrder" class="filter-select">
               <option value="desc" selected>Giảm dần</option>
@@ -122,7 +121,7 @@
           </div>
         </div>
 
-        <!-- Bảng dữ liệu 5 cột -->
+        <!-- Bảng dữ liệu -->
         <div class="table-responsive">
           <table class="iot-table">
             <thead>
@@ -135,7 +134,7 @@
               </tr>
             </thead>
             <tbody id="historyTableBody">
-              <!-- Render tự động bằng JavaScript -->
+              <!-- Render bằng JavaScript -->
               <tr>
                 <td colspan="5" class="table-empty">Đang tải lịch sử điều khiển...</td>
               </tr>

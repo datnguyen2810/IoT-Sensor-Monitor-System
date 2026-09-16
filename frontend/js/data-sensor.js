@@ -1,6 +1,6 @@
 /**
- * data-sensor.js - IoT Sensor Monitor System
- * Logic trang Lịch sử đo cảm biến (UC005): Tìm kiếm, Lọc, Sắp xếp, Phân trang
+ * data-sensor.js
+ * Logic trang Lịch sử đo cảm biến
  */
 
 if (typeof Auth !== 'undefined') {
@@ -55,14 +55,14 @@ async function loadSensorHistory() {
     }
   } catch (error) {
     console.warn('Backend offline, hiển thị dữ liệu mẫu cho data-sensor:', error.message);
-    // Dữ liệu mẫu chuẩn khớp với hình vẽ mock-up khi backend chưa bật
+    // Dữ liệu mẫu
     const mockData = [
-      { id: 1, sensor_name: "Ánh Sáng", value: "850 Lux", created_at: "2026-08-16 14:37:48" },
-      { id: 2, sensor_name: "Độ Ẩm", value: "83 %", created_at: "2026-08-16 14:37:48" },
-      { id: 3, sensor_name: "Nhiệt Độ", value: "30.5 °C", created_at: "2026-08-16 14:37:48" },
-      { id: 4, sensor_name: "Ánh Sáng", value: "754 Lux", created_at: "2026-08-16 14:38:01" },
-      { id: 5, sensor_name: "Độ Ẩm", value: "83 %", created_at: "2026-08-16 14:38:01" },
-      { id: 6, sensor_name: "Nhiệt Độ", value: "30.5 °C", created_at: "2026-08-16 14:38:01" }
+      { id: 1, sensor_name: "Ánh Sáng", value: "850", created_at: "2026-08-16 14:37:48" },
+      { id: 2, sensor_name: "Độ Ẩm", value: "83", created_at: "2026-08-16 14:37:48" },
+      { id: 3, sensor_name: "Nhiệt Độ", value: "30.5", created_at: "2026-08-16 14:37:48" },
+      { id: 4, sensor_name: "Ánh Sáng", value: "754", created_at: "2026-08-16 14:38:01" },
+      { id: 5, sensor_name: "Độ Ẩm", value: "83", created_at: "2026-08-16 14:38:01" },
+      { id: 6, sensor_name: "Nhiệt Độ", value: "30.5", created_at: "2026-08-16 14:38:01" }
     ];
     totalPages = 10;
     renderTableData(mockData);
@@ -109,7 +109,7 @@ function renderTableData(items) {
 }
 
 /**
- * Vẽ thanh phân trang thông minh
+ * Vẽ thanh phân trang
  * @param {number} total 
  * @param {number} current 
  */

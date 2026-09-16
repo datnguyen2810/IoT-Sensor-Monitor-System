@@ -1,5 +1,5 @@
 /**
- * api.js - IoT Sensor Monitor System
+ * api.js
  * Quản lý cấu hình BASE_URL, wrapper fetch tự động gắn Bearer Token và Toast Notification
  */
 

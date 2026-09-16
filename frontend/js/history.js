@@ -1,6 +1,6 @@
 /**
- * history.js - IoT Sensor Monitor System
- * Logic trang Lịch sử điều khiển thiết bị (UC006): Lọc, Tìm kiếm, Sắp xếp, Phân trang
+ * history.js
+ * Logic trang Lịch sử điều khiển thiết bị
  */
 
 if (typeof Auth !== 'undefined') {
@@ -57,7 +57,7 @@ async function loadDeviceHistory() {
     }
   } catch (error) {
     console.warn('Backend offline, hiển thị dữ liệu mẫu cho history:', error.message);
-    // Dữ liệu mẫu chuẩn khớp với hình vẽ mock-up khi backend chưa bật
+    // Dữ liệu mẫu
     const mockData = [
       { id: 1, device_name: "Điều hoà", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 16:44:14" },
       { id: 2, device_name: "Điều hoà", action_sent: "OFF", status_received: "OFF", executed_at: "2026-08-16 16:44:35" },

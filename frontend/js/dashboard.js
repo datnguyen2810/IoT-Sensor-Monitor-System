@@ -1,5 +1,5 @@
 /**
- * dashboard.js - IoT Sensor Monitor System
+ * dashboard.js
  * Logic trang Giám sát thông số cảm biến & Điều khiển thiết bị
  */
 
@@ -12,7 +12,6 @@ let sensorChart = null;
 let lastChartTimestamp = null;
 let pollingTimer = null;
 
-// Tên hiển thị thân thiện cho thiết bị
 const DEVICE_NAMES = {
   led: 'Đèn LED',
   fan: 'Quạt',
@@ -169,7 +168,7 @@ async function loadInitialChartData() {
     }
   } catch (error) {
     console.warn('Backend offline, sử dụng dữ liệu mẫu cho biểu đồ:', error.message);
-    // Dữ liệu mẫu khớp với hình thiết kế khi backend chưa bật
+    // Dữ liệu mẫu khi backend chưa bật
     const mockPoints = [
       { time: "17:15:00", temperature: 35.0, humidity: 55, light: 510 },
       { time: "17:16:00", temperature: 35.2, humidity: 54, light: 515 },
@@ -217,10 +216,10 @@ async function pollLatestSensorData() {
     const data = await apiRequest('/api/sensors/latest');
     if (!data) return;
 
-    // 1. Cập nhật ngay giá trị vào 3 Card
+    // Cập nhật giá trị vào 3 Card
     updateSensorCards(data.temperature, data.light, data.humidity);
 
-    // 2. Tối ưu trượt biểu đồ: kiểm tra timestamp khác biệt
+    // Tối ưu trượt biểu đồ: kiểm tra timestamp khác biệt
     const recordTime = data.timestamp || '';
     if (recordTime && recordTime !== lastChartTimestamp && sensorChart) {
       lastChartTimestamp = recordTime;
@@ -240,11 +239,11 @@ async function pollLatestSensorData() {
         sensorChart.data.datasets.forEach(ds => ds.data.shift());
       }
 
-      // Cập nhật không có animation giật để tạo hiệu ứng trượt mượt mà
+      // Cập nhật không có animation giật
       sensorChart.update('none');
     }
   } catch (error) {
-    // Polling ngầm bỏ qua lỗi network để tránh gián đoạn
+    // Polling ngầm bỏ qua lỗi network
     console.debug('Polling latest data:', error.message);
   }
 }
@@ -297,16 +296,16 @@ function setupDeviceControls() {
  * Khởi động toàn bộ trang Dashboard khi DOM sẵn sàng
  */
 document.addEventListener('DOMContentLoaded', async () => {
-  // 1. Cài đặt tương tác công tắc
+  // Cài đặt tương tác công tắc
   setupDeviceControls();
 
-  // 2. Khởi tạo dữ liệu ban đầu
+  // Khởi tạo dữ liệu ban đầu
   await Promise.allSettled([
     loadDeviceStatuses(),
     loadInitialChartData()
   ]);
 
-  // 3. Kích hoạt chu kỳ Polling mỗi 2s
+  // Kích hoạt chu kỳ Polling mỗi 2s
   pollLatestSensorData(); // Gọi ngay lần đầu
   pollingTimer = setInterval(pollLatestSensorData, 2000);
 });
