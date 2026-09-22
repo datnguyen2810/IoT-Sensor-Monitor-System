@@ -79,9 +79,9 @@ public class MqttService implements MqttCallbackExtended {
             mqttClient = new MqttClient(mqttConfig.getBrokerUrl(), mqttConfig.getClientId());
             mqttClient.setCallback(this);
             mqttClient.connect(mqttConnectOptions);
-            log.info("✅ Đã kết nối MQTT Broker: {}", mqttConfig.getBrokerUrl());
+            log.info("Đã kết nối MQTT Broker: {}", mqttConfig.getBrokerUrl());
         } catch (MqttException e) {
-            log.error("❌ Không thể kết nối MQTT Broker: {}", e.getMessage(), e);
+            log.error("Không thể kết nối MQTT Broker: {}", e.getMessage(), e);
         }
     }
 
@@ -94,7 +94,7 @@ public class MqttService implements MqttCallbackExtended {
             if (mqttClient != null && mqttClient.isConnected()) {
                 mqttClient.disconnect();
                 mqttClient.close();
-                log.info("🔌 Đã ngắt kết nối MQTT Broker");
+                log.info("Đã ngắt kết nối MQTT Broker");
             }
         } catch (MqttException e) {
             log.error("Lỗi khi ngắt kết nối MQTT: {}", e.getMessage(), e);
@@ -110,19 +110,19 @@ public class MqttService implements MqttCallbackExtended {
     @Override
     public void connectComplete(boolean reconnect, String serverURI) {
         String action = reconnect ? "Kết nối lại" : "Kết nối lần đầu";
-        log.info("🔗 MQTT {}: {}", action, serverURI);
+        log.info("MQTT {}: {}", action, serverURI);
         subscribeTopics();
     }
 
     @Override
     public void connectionLost(Throwable cause) {
-        log.warn("⚠️ Mất kết nối MQTT: {}. Đang thử kết nối lại...", cause.getMessage());
+        log.warn("Mất kết nối MQTT: {}. Đang thử kết nối lại...", cause.getMessage());
     }
 
     @Override
     public void messageArrived(String topic, MqttMessage message) {
         String payload = new String(message.getPayload());
-        log.debug("📩 MQTT nhận [{}]: {}", topic, payload);
+        log.debug("MQTT nhận [{}]: {}", topic, payload);
 
         try {
             switch (topic) {
@@ -149,9 +149,9 @@ public class MqttService implements MqttCallbackExtended {
         try {
             mqttClient.subscribe(TOPIC_SENSOR_DATA, 1);
             mqttClient.subscribe(TOPIC_DEVICE_STATUS, 1);
-            log.info("📡 Đã subscribe: {}, {}", TOPIC_SENSOR_DATA, TOPIC_DEVICE_STATUS);
+            log.info("Đã subscribe: {}, {}", TOPIC_SENSOR_DATA, TOPIC_DEVICE_STATUS);
         } catch (MqttException e) {
-            log.error("❌ Lỗi subscribe MQTT topics: {}", e.getMessage(), e);
+            log.error("Lỗi subscribe MQTT topics: {}", e.getMessage(), e);
         }
     }
 
@@ -169,7 +169,7 @@ public class MqttService implements MqttCallbackExtended {
         MqttMessage message = new MqttMessage(payload.getBytes());
         message.setQos(1);
         mqttClient.publish(topic, message);
-        log.info("📤 MQTT publish [{}]: {}", topic, payload);
+        log.info("MQTT publish [{}]: {}", topic, payload);
     }
 
     /**
@@ -227,10 +227,10 @@ public class MqttService implements MqttCallbackExtended {
             );
 
             dataSensorRepository.saveAll(records);
-            log.info("💾 Lưu dữ liệu cảm biến: temp={}, humi={}, light={}", temperature, humidity, light);
+            log.info("Lưu dữ liệu cảm biến: temp={}, humi={}, light={}", temperature, humidity, light);
 
         } catch (Exception e) {
-            log.error("❌ Lỗi parse dữ liệu cảm biến: {}", e.getMessage(), e);
+            log.error("Lỗi parse dữ liệu cảm biến: {}", e.getMessage(), e);
         }
     }
 
@@ -254,13 +254,13 @@ public class MqttService implements MqttCallbackExtended {
                             history -> {
                                 history.setStatus(status);
                                 historyRepository.save(history);
-                                log.info("✅ Cập nhật trạng thái {}: {} → {}", deviceCode, "PENDING/SENT", status);
+                                log.info("Cập nhật trạng thái {}: {} → {}", deviceCode, "PENDING/SENT", status);
                             },
-                            () -> log.warn("⚠️ Không tìm thấy bản ghi PENDING/SENT cho thiết bị: {}", deviceCode)
+                            () -> log.warn("Không tìm thấy bản ghi PENDING/SENT cho thiết bị: {}", deviceCode)
                     );
 
         } catch (Exception e) {
-            log.error("❌ Lỗi parse trạng thái thiết bị: {}", e.getMessage(), e);
+            log.error("Lỗi parse trạng thái thiết bị: {}", e.getMessage(), e);
         }
     }
 }
