@@ -116,7 +116,12 @@ async function apiRequest(endpoint, options = {}) {
     // Kiểm tra content-type để parse JSON hoặc text
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      return await response.json();
+      const json = await response.json();
+      // Tự động giải nén (unwrap) trường data nếu backend trả về chuẩn ApiResponse { status, message, data }
+      if (json && typeof json === 'object' && 'status' in json && 'data' in json) {
+        return json.data !== null && json.data !== undefined ? json.data : json;
+      }
+      return json;
     }
     return await response.text();
 

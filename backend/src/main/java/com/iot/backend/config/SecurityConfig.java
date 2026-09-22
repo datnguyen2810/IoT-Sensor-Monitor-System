@@ -33,11 +33,14 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CorsConfigurationSource corsConfigurationSource;
+    private final ObjectMapper objectMapper;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
-                          CorsConfigurationSource corsConfigurationSource) {
+                          CorsConfigurationSource corsConfigurationSource,
+                          ObjectMapper objectMapper) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.corsConfigurationSource = corsConfigurationSource;
+        this.objectMapper = objectMapper;
     }
 
     @Bean
@@ -58,14 +61,18 @@ public class SecurityConfig {
                 // Tất cả API còn lại yêu cầu Bearer token
                 .anyRequest().authenticated()
             )
-            // Trả JSON 401 thay vì trang HTML mặc định khi chưa xác thực
+            // Trả JSON 401 theo chuẩn ApiResponse thay vì trang HTML mặc định khi chưa xác thực
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint((request, response, authException) -> {
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     response.setCharacterEncoding("UTF-8");
-                    new ObjectMapper().writeValue(response.getOutputStream(),
-                            Map.of("error", "Unauthorized", "message", "Token không hợp lệ hoặc đã hết hạn"));
+                    com.iot.backend.dto.response.ApiResponse<Void> apiResponse =
+                            com.iot.backend.dto.response.ApiResponse.error(
+                                    HttpServletResponse.SC_UNAUTHORIZED,
+                                    "Token không hợp lệ hoặc đã hết hạn"
+                            );
+                    objectMapper.writeValue(response.getOutputStream(), apiResponse);
                 })
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

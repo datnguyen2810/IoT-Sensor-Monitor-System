@@ -39,11 +39,12 @@ const Auth = {
         body: JSON.stringify({ username, password })
       });
 
-      if (response && response.token) {
-        localStorage.setItem(API_CONFIG.TOKEN_KEY, response.token);
+      const token = response?.token || response?.data?.token;
+      if (token) {
+        localStorage.setItem(API_CONFIG.TOKEN_KEY, token);
         localStorage.setItem(API_CONFIG.USER_KEY, JSON.stringify({
           name: 'Nguyễn Xuân Đạt',
-          username: username
+          username: response?.username || response?.data?.username || username
         }));
 
         if (rememberMe) {

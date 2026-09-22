@@ -1,6 +1,7 @@
 package com.iot.backend.controller;
 
 import com.iot.backend.dto.request.LoginRequest;
+import com.iot.backend.dto.response.ApiResponse;
 import com.iot.backend.dto.response.LoginResponse;
 import com.iot.backend.service.AuthService;
 import jakarta.validation.Valid;
@@ -25,11 +26,11 @@ public class AuthController {
      * POST /api/auth/login
      *
      * @param loginRequest thông tin tài khoản hợp lệ (@Valid)
-     * @return Token JWT và thông tin tài khoản nếu hợp lệ
+     * @return ApiResponse chứa LoginResponse (token, username)
      */
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest loginRequest) {
         LoginResponse response = authService.login(loginRequest);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success("Đăng nhập thành công", response));
     }
 }
