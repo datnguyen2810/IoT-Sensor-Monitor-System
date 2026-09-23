@@ -1,5 +1,4 @@
 /**
- * dashboard.js
  * Logic trang Giám sát thông số cảm biến & Điều khiển thiết bị
  */
 
@@ -17,6 +16,33 @@ const DEVICE_NAMES = {
   fan: 'Quạt',
   ac: 'Điều hoà'
 };
+
+/**
+ * Đồng bộ hiệu ứng visual (viền neon, animation icon, badge) theo trạng thái ON/OFF
+ * @param {string} device  - tên thiết bị: 'led' | 'fan' | 'ac'
+ * @param {boolean} isOn   - true nếu đang BẬT
+ */
+function updateDeviceVisual(device, isOn) {
+  const card = document.getElementById(`card-${device}`);
+  const badge = document.getElementById(`status-${device}`);
+  if (!card) return;
+
+  const activeClass = `active-${device}`;
+
+  if (isOn) {
+    card.classList.add(activeClass);
+    if (badge) {
+      badge.textContent = 'Đang bật';
+      badge.classList.add('on');
+    }
+  } else {
+    card.classList.remove(activeClass);
+    if (badge) {
+      badge.textContent = 'Đã tắt';
+      badge.classList.remove('on');
+    }
+  }
+}
 
 /**
  * Khởi tạo biểu đồ Chart.js với 3 đường cảm biến
@@ -141,7 +167,9 @@ async function loadDeviceStatuses() {
       devices.forEach(item => {
         const switchElem = document.querySelector(`input[data-device="${item.device}"]`);
         if (switchElem) {
-          switchElem.checked = (item.status === 'ON');
+          const isOn = (item.status === 'ON');
+          switchElem.checked = isOn;
+          updateDeviceVisual(item.device, isOn);
         }
       });
     }
@@ -275,13 +303,15 @@ function setupDeviceControls() {
         // Kiểm tra phản hồi thành công (200 OK)
         if (response && (response.status === 'success' || response.device_status === action)) {
           this.checked = (action === 'ON');
+          updateDeviceVisual(device, action === 'ON');
           showToast(`Đã chuyển trạng thái ${deviceLabel} sang: ${action}`, 'success');
         } else {
           throw new Error(response.message || 'Phản hồi không thành công');
         }
-      } catch (error) {
+      } catch (error) { 
         // Rollback hoàn trả vị trí công tắc về trạng thái trước đó
         this.checked = previousChecked;
+        updateDeviceVisual(device, previousChecked);
         showToast(`Lỗi điều khiển ${deviceLabel}: ${error.message || 'Vui lòng thử lại'}`, 'error');
       } finally {
         // Mở khóa lại công tắc
