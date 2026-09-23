@@ -1,5 +1,4 @@
 /**
- * history.js
  * Logic trang Lịch sử điều khiển thiết bị
  */
 
@@ -8,7 +7,7 @@ if (typeof Auth !== 'undefined') {
 }
 
 let currentPage = 1;
-const limit = 10;
+let limit = 10;
 let totalPages = 1;
 let totalRecords = 0;
 
@@ -16,10 +15,15 @@ let totalRecords = 0;
  * Tải danh sách lịch sử điều khiển thiết bị từ API
  */
 async function loadDeviceHistory() {
-  const device = document.getElementById('deviceFilter').value;
-  const status = document.getElementById('statusFilter').value;
-  const search = document.getElementById('timeSearchInput').value.trim();
-  const sort = document.getElementById('sortOrder').value;
+  const pageSizeSelect = document.getElementById('pageSizeSelect');
+  if (pageSizeSelect) {
+    limit = parseInt(pageSizeSelect.value, 10) || limit;
+  }
+  const device = document.getElementById('deviceFilter')?.value || '';
+  const action = document.getElementById('actionFilter')?.value || '';
+  const status = document.getElementById('statusFilter')?.value || '';
+  const search = document.getElementById('timeSearchInput')?.value.trim() || '';
+  const sort = document.getElementById('sortOrder')?.value || 'desc';
   const tbody = document.getElementById('historyTableBody');
 
   tbody.innerHTML = `
@@ -34,6 +38,7 @@ async function loadDeviceHistory() {
       limit: limit,
       search: search,
       device: device,
+      action: action,
       status: status,
       sort: sort
     });
@@ -58,17 +63,49 @@ async function loadDeviceHistory() {
   } catch (error) {
     console.warn('Backend offline, hiển thị dữ liệu mẫu cho history:', error.message);
     // Dữ liệu mẫu
-    const mockData = [
+    let mockData = [
       { id: 1, device_name: "Điều hoà", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 16:44:14" },
       { id: 2, device_name: "Điều hoà", action_sent: "OFF", status_received: "OFF", executed_at: "2026-08-16 16:44:35" },
       { id: 3, device_name: "Đèn LED", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 10:59:45" },
       { id: 4, device_name: "Quạt", action_sent: "OFF", status_received: "OFF", executed_at: "2026-08-16 10:59:48" },
       { id: 5, device_name: "Đèn LED", action_sent: "OFF", status_received: "OFF", executed_at: "2026-08-16 10:59:54" },
-      { id: 6, device_name: "Điều hoà", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 11:45:55" }
+      { id: 6, device_name: "Điều hoà", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 11:45:55" },
+      { id: 7, device_name: "Quạt", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 11:46:02" },
+      { id: 8, device_name: "Đèn LED", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 11:47:10" },
+      { id: 9, device_name: "Điều hoà", action_sent: "OFF", status_received: "OFF", executed_at: "2026-08-16 11:50:22" },
+      { id: 10, device_name: "Quạt", action_sent: "OFF", status_received: "OFF", executed_at: "2026-08-16 11:55:00" },
+      { id: 11, device_name: "Đèn LED", action_sent: "OFF", status_received: "OFF", executed_at: "2026-08-16 12:00:15" },
+      { id: 12, device_name: "Điều hoà", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 12:05:30" }
     ];
-    totalPages = 10;
-    renderTableData(mockData);
-    renderPagination(10, currentPage);
+
+    // Lọc theo thiết bị
+    if (device) {
+      mockData = mockData.filter(item => item.device_name === device);
+    }
+    // Lọc theo hành động
+    if (action) {
+      mockData = mockData.filter(item => (item.action_sent || item.action) === action);
+    }
+    // Lọc theo trạng thái
+    if (status) {
+      mockData = mockData.filter(item => (item.status_received || item.status) === status);
+    }
+    // Tìm kiếm theo thời gian
+    if (search) {
+      mockData = mockData.filter(item => (item.executed_at || '').includes(search));
+    }
+    // Sắp xếp
+    if (sort === 'asc') {
+      mockData.sort((a, b) => a.id - b.id);
+    } else {
+      mockData.sort((a, b) => b.id - a.id);
+    }
+
+    totalRecords = mockData.length;
+    totalPages = Math.max(10, Math.ceil(totalRecords / limit));
+    const pagedItems = mockData.slice((currentPage - 1) * limit, currentPage * limit);
+    renderTableData(pagedItems.length > 0 ? pagedItems : mockData.slice(0, limit));
+    renderPagination(totalPages, currentPage);
   }
 }
 
@@ -114,11 +151,25 @@ function renderTableData(items) {
  * @param {number} current 
  */
 function renderPagination(total, current) {
+  const currentEl = document.getElementById('currentPageDisplay');
+  const totalEl = document.getElementById('totalPagesDisplay');
+  if (currentEl) currentEl.textContent = current;
+  if (totalEl) totalEl.textContent = total;
+
   const container = document.getElementById('pagination');
   if (!container) return;
 
-  if (total <= 1) {
+  if (total <= 0) {
     container.innerHTML = '';
+    return;
+  }
+
+  if (total === 1) {
+    container.innerHTML = `
+      <button class="page-btn" disabled title="Trang trước">&lt;</button>
+      <button class="page-btn active">1</button>
+      <button class="page-btn" disabled title="Trang sau">&gt;</button>
+    `;
     return;
   }
 
@@ -188,6 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnSearch = document.getElementById('btnSearch');
   const searchInput = document.getElementById('timeSearchInput');
   const deviceFilter = document.getElementById('deviceFilter');
+  const actionFilter = document.getElementById('actionFilter');
   const statusFilter = document.getElementById('statusFilter');
   const sortOrder = document.getElementById('sortOrder');
 
@@ -208,6 +260,13 @@ document.addEventListener('DOMContentLoaded', () => {
     loadDeviceHistory();
   });
 
+  if (actionFilter) {
+    actionFilter.addEventListener('change', () => {
+      currentPage = 1;
+      loadDeviceHistory();
+    });
+  }
+
   statusFilter.addEventListener('change', () => {
     currentPage = 1;
     loadDeviceHistory();
@@ -217,6 +276,15 @@ document.addEventListener('DOMContentLoaded', () => {
     currentPage = 1;
     loadDeviceHistory();
   });
+
+  const pageSizeSelect = document.getElementById('pageSizeSelect');
+  if (pageSizeSelect) {
+    pageSizeSelect.addEventListener('change', (e) => {
+      limit = parseInt(e.target.value, 10) || 10;
+      currentPage = 1;
+      loadDeviceHistory();
+    });
+  }
 
   // Tải dữ liệu ban đầu
   loadDeviceHistory();

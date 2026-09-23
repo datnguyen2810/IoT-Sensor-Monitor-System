@@ -1,5 +1,4 @@
 /**
- * data-sensor.js
  * Logic trang Lịch sử đo cảm biến
  */
 
@@ -8,7 +7,7 @@ if (typeof Auth !== 'undefined') {
 }
 
 let currentPage = 1;
-const limit = 10;
+let limit = 10;
 let totalPages = 1;
 let totalRecords = 0;
 
@@ -16,9 +15,13 @@ let totalRecords = 0;
  * Tải dữ liệu lịch sử cảm biến từ API
  */
 async function loadSensorHistory() {
-  const sensorType = document.getElementById('sensorTypeFilter').value;
-  const search = document.getElementById('timeSearchInput').value.trim();
-  const sort = document.getElementById('sortOrder').value;
+  const pageSizeSelect = document.getElementById('pageSizeSelect');
+  if (pageSizeSelect) {
+    limit = parseInt(pageSizeSelect.value, 10) || limit;
+  }
+  const sensorType = document.getElementById('sensorTypeFilter')?.value || '';
+  const search = document.getElementById('timeSearchInput')?.value.trim() || '';
+  const sort = document.getElementById('sortOrder')?.value || 'desc';
   const tbody = document.getElementById('sensorTableBody');
 
   tbody.innerHTML = `
@@ -31,10 +34,24 @@ async function loadSensorHistory() {
     const queryParams = new URLSearchParams({
       page: currentPage,
       limit: limit,
-      search: search,
-      sensor_type: sensorType,
       sort: sort
     });
+
+    if (sensorType === 'Thời Gian') {
+      // Khi chọn Thời Gian: tìm kiếm chuỗi thời gian
+      queryParams.set('search', search);
+      queryParams.set('sensor_type', '');
+      queryParams.set('search_type', 'time');
+    } else if (sensorType) {
+      // Khi chọn loại cảm biến cụ thể: lọc theo loại và giá trị
+      queryParams.set('sensor_type', sensorType);
+      queryParams.set('search', search);
+      queryParams.set('search_type', 'value');
+    } else {
+      // Khi chọn Tất cả
+      queryParams.set('sensor_type', '');
+      queryParams.set('search', search);
+    }
 
     const result = await apiRequest(`/api/sensors/history?${queryParams.toString()}`);
 
@@ -56,17 +73,53 @@ async function loadSensorHistory() {
   } catch (error) {
     console.warn('Backend offline, hiển thị dữ liệu mẫu cho data-sensor:', error.message);
     // Dữ liệu mẫu
-    const mockData = [
+    const rawMockData = [
       { id: 1, sensor_name: "Ánh Sáng", value: "850", created_at: "2026-08-16 14:37:48" },
       { id: 2, sensor_name: "Độ Ẩm", value: "83", created_at: "2026-08-16 14:37:48" },
       { id: 3, sensor_name: "Nhiệt Độ", value: "30.5", created_at: "2026-08-16 14:37:48" },
       { id: 4, sensor_name: "Ánh Sáng", value: "754", created_at: "2026-08-16 14:38:01" },
       { id: 5, sensor_name: "Độ Ẩm", value: "83", created_at: "2026-08-16 14:38:01" },
-      { id: 6, sensor_name: "Nhiệt Độ", value: "30.5", created_at: "2026-08-16 14:38:01" }
+      { id: 6, sensor_name: "Nhiệt Độ", value: "30.5", created_at: "2026-08-16 14:38:01" },
+      { id: 7, sensor_name: "Ánh Sáng", value: "620", created_at: "2026-08-16 14:39:15" },
+      { id: 8, sensor_name: "Độ Ẩm", value: "80", created_at: "2026-08-16 14:39:15" },
+      { id: 9, sensor_name: "Nhiệt Độ", value: "29.8", created_at: "2026-08-16 14:39:15" },
+      { id: 10, sensor_name: "Ánh Sáng", value: "910", created_at: "2026-08-16 14:40:30" },
+      { id: 11, sensor_name: "Độ Ẩm", value: "78", created_at: "2026-08-16 14:40:30" },
+      { id: 12, sensor_name: "Nhiệt Độ", value: "31.2", created_at: "2026-08-16 14:40:30" }
     ];
-    totalPages = 10;
-    renderTableData(mockData);
-    renderPagination(10, currentPage);
+
+    let filtered = [...rawMockData];
+
+    if (sensorType === 'Thời Gian') {
+      if (search) {
+        filtered = filtered.filter(item => (item.created_at || '').includes(search));
+      }
+    } else if (sensorType) {
+      filtered = filtered.filter(item => item.sensor_name === sensorType);
+      if (search) {
+        filtered = filtered.filter(item => String(item.value).includes(search));
+      }
+    } else {
+      if (search) {
+        filtered = filtered.filter(item =>
+          item.sensor_name.toLowerCase().includes(search.toLowerCase()) ||
+          String(item.value).includes(search) ||
+          (item.created_at || '').includes(search)
+        );
+      }
+    }
+
+    if (sort === 'asc') {
+      filtered.sort((a, b) => a.id - b.id);
+    } else {
+      filtered.sort((a, b) => b.id - a.id);
+    }
+
+    totalRecords = filtered.length;
+    totalPages = Math.max(10, Math.ceil(totalRecords / limit));
+    const pagedItems = filtered.slice((currentPage - 1) * limit, currentPage * limit);
+    renderTableData(pagedItems.length > 0 ? pagedItems : filtered.slice(0, limit));
+    renderPagination(totalPages, currentPage);
   }
 }
 
@@ -114,11 +167,25 @@ function renderTableData(items) {
  * @param {number} current 
  */
 function renderPagination(total, current) {
+  const currentEl = document.getElementById('currentPageDisplay');
+  const totalEl = document.getElementById('totalPagesDisplay');
+  if (currentEl) currentEl.textContent = current;
+  if (totalEl) totalEl.textContent = total;
+
   const container = document.getElementById('pagination');
   if (!container) return;
 
-  if (total <= 1) {
+  if (total <= 0) {
     container.innerHTML = '';
+    return;
+  }
+
+  if (total === 1) {
+    container.innerHTML = `
+      <button class="page-btn" disabled title="Trang trước">&lt;</button>
+      <button class="page-btn active">1</button>
+      <button class="page-btn" disabled title="Trang sau">&gt;</button>
+    `;
     return;
   }
 
@@ -204,8 +271,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Khi thay đổi loại cảm biến
+  // Khi thay đổi loại cảm biến / tiêu chí lọc
   sensorTypeFilter.addEventListener('change', () => {
+    if (sensorTypeFilter.value === 'Thời Gian') {
+      searchInput.placeholder = 'Nhập thời gian (VD: 14:37 hoặc 2026-08-16)';
+    } else if (sensorTypeFilter.value) {
+      searchInput.placeholder = `Nhập giá trị ${sensorTypeFilter.value.toLowerCase()}...`;
+    } else {
+      searchInput.placeholder = 'Nhập giá trị';
+    }
     currentPage = 1;
     loadSensorHistory();
   });
@@ -215,6 +289,15 @@ document.addEventListener('DOMContentLoaded', () => {
     currentPage = 1;
     loadSensorHistory();
   });
+
+  const pageSizeSelect = document.getElementById('pageSizeSelect');
+  if (pageSizeSelect) {
+    pageSizeSelect.addEventListener('change', (e) => {
+      limit = parseInt(e.target.value, 10) || 10;
+      currentPage = 1;
+      loadSensorHistory();
+    });
+  }
 
   // Tải dữ liệu ban đầu
   loadSensorHistory();
