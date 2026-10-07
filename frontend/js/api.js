@@ -1,5 +1,4 @@
 /**
- * api.js
  * Quản lý cấu hình BASE_URL, wrapper fetch tự động gắn Bearer Token và Toast Notification
  */
 
@@ -60,7 +59,7 @@ function showToast(message, type = 'info', duration = 3500) {
 /**
  * Hàm fetch bao bọc tự động gắn Authorization Header và xử lý lỗi tập trung
  * @param {string} endpoint - Đường dẫn API (ví dụ: /api/devices/status)
- * @param {object} options - Tùy chọn fetch (method, headers, body, v.v.)
+ * @param {object} options - Tùy chọn fetch (method, headers, body, ...)
  * @returns {Promise<any>}
  */
 async function apiRequest(endpoint, options = {}) {
@@ -117,7 +116,7 @@ async function apiRequest(endpoint, options = {}) {
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
       const json = await response.json();
-      // Tự động giải nén (unwrap) trường data nếu backend trả về chuẩn ApiResponse { status, message, data }
+      // Tự động giải nén trường data nếu backend trả về chuẩn ApiResponse { status, message, data }
       if (json && typeof json === 'object' && 'status' in json && 'data' in json) {
         return json.data !== null && json.data !== undefined ? json.data : json;
       }
@@ -131,8 +130,8 @@ async function apiRequest(endpoint, options = {}) {
       showToast('Yêu cầu hết thời gian chờ (Timeout 10s)!', 'error');
       throw new Error('Request Timeout');
     }
-    // Không bắn toast nếu là endpoint polling ngầm để tránh spam màn hình
-    if (!endpoint.includes('/latest')) {
+    // Không bắn toast nếu là endpoint polling ngầm hoặc caller muốn tự xử lý (silent)
+    if (!endpoint.includes('/latest') && !options.silent) {
       showToast(error.message || 'Lỗi kết nối đến máy chủ Backend!', 'error');
     }
     throw error;

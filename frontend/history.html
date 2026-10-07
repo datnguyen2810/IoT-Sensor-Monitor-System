@@ -93,6 +93,13 @@
               <option value="Điều hoà">Điều hoà</option>
             </select>
 
+            <!-- Dropdown chọn hành động -->
+            <select id="actionFilter" class="filter-select">
+              <option value="">Hành Động</option>
+              <option value="ON">ON</option>
+              <option value="OFF">OFF</option>
+            </select>
+
             <!-- Dropdown chọn trạng thái -->
             <select id="statusFilter" class="filter-select">
               <option value="">Trạng Thái</option>
@@ -130,21 +137,41 @@
                 <th>Thiết Bị</th>
                 <th>Hành Động</th>
                 <th>Trạng Thái</th>
+                <th>Người Điều Khiển</th>
                 <th>Thời Gian</th>
               </tr>
             </thead>
             <tbody id="historyTableBody">
               <!-- Render bằng JavaScript -->
               <tr>
-                <td colspan="5" class="table-empty">Đang tải lịch sử điều khiển...</td>
+                <td colspan="6" class="table-empty">Đang tải lịch sử điều khiển...</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <!-- Thanh phân trang (Pagination) -->
-        <div class="pagination-container" id="pagination">
-          <!-- Các nút phân trang được tạo động -->
+        <!-- Khu vực cuối bảng: Trang hiện tại, Tổng số trang & Page Size -->
+        <div class="table-footer">
+          <div class="pagination-info">
+            <span class="page-stat-badge">
+              Trang <strong id="currentPageDisplay">1</strong> / <strong id="totalPagesDisplay">10</strong>
+            </span>
+            <span class="stat-divider">•</span>
+            <div class="page-size-wrapper">
+              <span class="config-label">Page Size:</span>
+              <select id="pageSizeSelect" class="page-size-select">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Thanh phân trang (Pagination) -->
+          <div class="pagination-container" id="pagination">
+            <!-- Các nút phân trang được tạo động -->
+          </div>
         </div>
       </div>
     </main>

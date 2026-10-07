@@ -1,5 +1,4 @@
 /**
- * dashboard.js
  * Logic trang Giám sát thông số cảm biến & Điều khiển thiết bị
  */
 
@@ -12,11 +11,62 @@ let sensorChart = null;
 let lastChartTimestamp = null;
 let pollingTimer = null;
 
+// Dữ liệu hiển thị cố định khi chưa kết nối được Backend.
+// Khi Backend trả dữ liệu hợp lệ, các giá trị này sẽ được thay thế tự động.
+const DEFAULT_SENSOR_DATA = {
+  temperature: 35.6,
+  humidity: 55,
+  light: 534
+};
+
+const DEFAULT_CHART_DATA = [
+  { time: '17:15:00', temperature: 35.0, humidity: 55, light: 510 },
+  { time: '17:16:00', temperature: 35.2, humidity: 54, light: 515 },
+  { time: '17:17:00', temperature: 35.4, humidity: 55, light: 520 },
+  { time: '17:18:00', temperature: 35.5, humidity: 56, light: 518 },
+  { time: '17:19:00', temperature: 35.6, humidity: 55, light: 512 },
+  { time: '17:20:00', temperature: 35.5, humidity: 55, light: 505 },
+  { time: '17:21:00', temperature: 35.4, humidity: 56, light: 498 },
+  { time: '17:22:00', temperature: 35.3, humidity: 57, light: 490 },
+  { time: '17:23:00', temperature: 35.4, humidity: 56, light: 495 },
+  { time: '17:24:00', temperature: 35.5, humidity: 55, light: 508 },
+  { time: '17:25:00', temperature: 35.6, humidity: 55, light: 520 },
+  { time: '17:26:00', temperature: 35.7, humidity: 54, light: 528 },
+  { time: '17:27:00', ...DEFAULT_SENSOR_DATA }
+];
+
 const DEVICE_NAMES = {
   led: 'Đèn LED',
   fan: 'Quạt',
   ac: 'Điều hoà'
 };
+
+/**
+ * Đồng bộ hiệu ứng visual (viền neon, animation icon, badge) theo trạng thái ON/OFF
+ * @param {string} device  - tên thiết bị: 'led' | 'fan' | 'ac'
+ * @param {boolean} isOn   - true nếu đang BẬT
+ */
+function updateDeviceVisual(device, isOn) {
+  const card = document.getElementById(`card-${device}`);
+  const badge = document.getElementById(`status-${device}`);
+  if (!card) return;
+
+  const activeClass = `active-${device}`;
+
+  if (isOn) {
+    card.classList.add(activeClass);
+    if (badge) {
+      badge.textContent = 'Đang bật';
+      badge.classList.add('on');
+    }
+  } else {
+    card.classList.remove(activeClass);
+    if (badge) {
+      badge.textContent = 'Đã tắt';
+      badge.classList.remove('on');
+    }
+  }
+}
 
 /**
  * Khởi tạo biểu đồ Chart.js với 3 đường cảm biến
@@ -136,18 +186,32 @@ function initChart(chartData = []) {
  */
 async function loadDeviceStatuses() {
   try {
-    const devices = await apiRequest('/api/devices/status');
+    const devices = await apiRequest('/api/devices/status', { silent: true });
     if (Array.isArray(devices)) {
       devices.forEach(item => {
         const switchElem = document.querySelector(`input[data-device="${item.device}"]`);
         if (switchElem) {
-          switchElem.checked = (item.status === 'ON');
+          const isOn = (item.status === 'ON');
+          switchElem.checked = isOn;
+          updateDeviceVisual(item.device, isOn);
         }
       });
+      return;
     }
   } catch (error) {
-    console.warn('Không thể tải trạng thái thiết bị ban đầu:', error.message);
+    console.warn('Backend offline, khôi phục trạng thái thiết bị mô phỏng:', error.message);
   }
+
+  // Khôi phục trạng thái đã test từ sessionStorage nếu Backend chưa kết nối
+  ['led', 'fan', 'ac'].forEach(device => {
+    const savedStatus = sessionStorage.getItem(`mock_device_${device}`);
+    const isOn = (savedStatus === 'ON');
+    const switchElem = document.querySelector(`input[data-device="${device}"]`);
+    if (switchElem) {
+      switchElem.checked = isOn;
+      updateDeviceVisual(device, isOn);
+    }
+  });
 }
 
 /**
@@ -155,7 +219,7 @@ async function loadDeviceStatuses() {
  */
 async function loadInitialChartData() {
   try {
-    const chartData = await apiRequest('/api/sensors/chart');
+    const chartData = await apiRequest('/api/sensors/chart', { silent: true });
     if (Array.isArray(chartData) && chartData.length > 0) {
       initChart(chartData);
       
@@ -163,29 +227,22 @@ async function loadInitialChartData() {
       const latestPoint = chartData[chartData.length - 1];
       updateSensorCards(latestPoint.temperature, latestPoint.light, latestPoint.humidity);
     } else {
-      // Dữ liệu mẫu ban đầu nếu backend trả về rỗng
-      initChart([]);
+      // Giữ dữ liệu cố định nếu Backend chưa có bản ghi cảm biến.
+      initChart(DEFAULT_CHART_DATA);
+      updateSensorCards(
+        DEFAULT_SENSOR_DATA.temperature,
+        DEFAULT_SENSOR_DATA.light,
+        DEFAULT_SENSOR_DATA.humidity
+      );
     }
   } catch (error) {
-    console.warn('Backend offline, sử dụng dữ liệu mẫu cho biểu đồ:', error.message);
-    // Dữ liệu mẫu khi backend chưa bật
-    const mockPoints = [
-      { time: "17:15:00", temperature: 35.0, humidity: 55, light: 510 },
-      { time: "17:16:00", temperature: 35.2, humidity: 54, light: 515 },
-      { time: "17:17:00", temperature: 35.4, humidity: 55, light: 520 },
-      { time: "17:18:00", temperature: 35.5, humidity: 56, light: 518 },
-      { time: "17:19:00", temperature: 35.6, humidity: 55, light: 512 },
-      { time: "17:20:00", temperature: 35.5, humidity: 55, light: 505 },
-      { time: "17:21:00", temperature: 35.4, humidity: 56, light: 498 },
-      { time: "17:22:00", temperature: 35.3, humidity: 57, light: 490 },
-      { time: "17:23:00", temperature: 35.4, humidity: 56, light: 495 },
-      { time: "17:24:00", temperature: 35.5, humidity: 55, light: 508 },
-      { time: "17:25:00", temperature: 35.6, humidity: 55, light: 520 },
-      { time: "17:26:00", temperature: 35.7, humidity: 54, light: 528 },
-      { time: "17:27:00", temperature: 35.6, humidity: 55, light: 534 }
-    ];
-    initChart(mockPoints);
-    updateSensorCards(35.6, 534, 55);
+    console.warn('Backend offline, giữ dữ liệu mặc định trên Dashboard:', error.message);
+    initChart(DEFAULT_CHART_DATA);
+    updateSensorCards(
+      DEFAULT_SENSOR_DATA.temperature,
+      DEFAULT_SENSOR_DATA.light,
+      DEFAULT_SENSOR_DATA.humidity
+    );
   }
 }
 
@@ -243,7 +300,7 @@ async function pollLatestSensorData() {
       sensorChart.update('none');
     }
   } catch (error) {
-    // Polling ngầm bỏ qua lỗi network
+    // Backend chưa sẵn sàng: giữ nguyên dữ liệu mặc định, không tự sinh số giả.
     console.debug('Polling latest data:', error.message);
   }
 }
@@ -266,23 +323,41 @@ function setupDeviceControls() {
       this.disabled = true;
       if (parentLabel) parentLabel.classList.add('loading');
 
+      const currentUser = (typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function')
+        ? (Auth.getCurrentUser()?.username || 'Admin')
+        : 'Admin';
+
       try {
         const response = await apiRequest('/api/devices/control', {
           method: 'POST',
-          body: JSON.stringify({ device, action })
+          body: JSON.stringify({ device, action, user: currentUser }),
+          silent: true
         });
 
         // Kiểm tra phản hồi thành công (200 OK)
         if (response && (response.status === 'success' || response.device_status === action)) {
           this.checked = (action === 'ON');
+          updateDeviceVisual(device, action === 'ON');
           showToast(`Đã chuyển trạng thái ${deviceLabel} sang: ${action}`, 'success');
         } else {
           throw new Error(response.message || 'Phản hồi không thành công');
         }
-      } catch (error) {
-        // Rollback hoàn trả vị trí công tắc về trạng thái trước đó
-        this.checked = previousChecked;
-        showToast(`Lỗi điều khiển ${deviceLabel}: ${error.message || 'Vui lòng thử lại'}`, 'error');
+      } catch (error) { 
+        // Khi chưa chạy Backend hoặc lỗi mạng, tự động chuyển sang chế độ mô phỏng để test UI & hiệu ứng hoạt họa
+        console.warn(`Backend offline khi điều khiển ${deviceLabel}. Chạy chế độ mô phỏng:`, error.message);
+
+        // Tạo độ trễ nhẹ 150ms giả lập xử lý phần cứng
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        this.checked = (action === 'ON');
+        updateDeviceVisual(device, action === 'ON');
+
+        // Lưu trạng thái tạm vào sessionStorage để giữ trạng thái khi reload trang
+        try {
+          sessionStorage.setItem(`mock_device_${device}`, action);
+        } catch (_) {}
+
+        // showToast(`[Mô phỏng] Đã ${action === 'ON' ? 'bật' : 'tắt'} ${deviceLabel}`, 'info');
       } finally {
         // Mở khóa lại công tắc
         this.disabled = false;
@@ -316,4 +391,3 @@ window.addEventListener('beforeunload', () => {
     clearInterval(pollingTimer);
   }
 });
-

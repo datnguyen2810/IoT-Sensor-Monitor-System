@@ -85,16 +85,17 @@
         <!-- Toolbar lọc và tìm kiếm -->
         <div class="toolbar">
           <div class="toolbar-left">
-            <!-- Dropdown chọn loại cảm biến -->
+            <!-- Dropdown chọn tiêu chí lọc / loại cảm biến -->
             <select id="sensorTypeFilter" class="filter-select">
-              <option value="">Tất cả cảm biến</option>
+              <option value="">Tất cả</option>
+              <option value="Thời Gian">Thời Gian</option>
               <option value="Nhiệt Độ">Nhiệt Độ</option>
               <option value="Độ Ẩm">Độ Ẩm</option>
               <option value="Ánh Sáng">Ánh Sáng</option>
             </select>
 
-            <!-- Ô nhập tìm kiếm theo thời gian -->
-            <input type="text" id="timeSearchInput" class="filter-input" placeholder="Nhập thời gian">
+            <!-- Ô nhập giá trị tìm kiếm -->
+            <input type="text" id="timeSearchInput" class="filter-input" placeholder="Nhập giá trị">
 
             <!-- Nút bấm Tìm kiếm -->
             <button id="btnSearch" class="btn-search">
@@ -134,9 +135,28 @@
           </table>
         </div>
 
-        <!-- Thanh phân trang -->
-        <div class="pagination-container" id="pagination">
-          <!-- Các nút phân trang được tạo động -->
+        <!-- Khu vực cuối bảng: Trang hiện tại, Tổng số trang & Page Size -->
+        <div class="table-footer">
+          <div class="pagination-info">
+            <span class="page-stat-badge">
+              Trang <strong id="currentPageDisplay">1</strong> / <strong id="totalPagesDisplay">10</strong>
+            </span>
+            <span class="stat-divider">•</span>
+            <div class="page-size-wrapper">
+              <span class="config-label">Page Size:</span>
+              <select id="pageSizeSelect" class="page-size-select">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Thanh phân trang (Pagination) -->
+          <div class="pagination-container" id="pagination">
+            <!-- Các nút phân trang được tạo động -->
+          </div>
         </div>
       </div>
     </main>

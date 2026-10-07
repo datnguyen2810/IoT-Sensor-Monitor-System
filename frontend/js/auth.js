@@ -1,5 +1,4 @@
 /**
- * auth.js
  * Quản lý phiên đăng nhập, Auth Guard và Đăng xuất
  */
 
