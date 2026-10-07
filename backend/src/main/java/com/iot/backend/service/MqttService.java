@@ -1,10 +1,11 @@
 package com.iot.backend.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.iot.backend.config.MqttConfig;
 import com.iot.backend.entity.DataSensor;
 import com.iot.backend.entity.History;
+import com.iot.backend.entity.CommandStatus;
 import com.iot.backend.entity.Sensor;
 import com.iot.backend.repository.DataSensorRepository;
 import com.iot.backend.repository.DeviceRepository;
@@ -236,27 +237,49 @@ public class MqttService implements MqttCallbackExtended {
 
     /**
      * Xử lý phản hồi trạng thái thiết bị từ ESP8266.
-     * Payload: {"device": "led", "status": "ON"}
-     * Cập nhật bản ghi history gần nhất có status = PENDING/SENT sang ON/OFF.
+     * Payload mới: {"device":"led","status":"success","device_status":"ON"}.
+     * Vẫn nhận payload firmware cũ {"device":"led","status":"ON"}.
+     * Chỉ cập nhật lệnh pending; kết quả lệnh tách khỏi trạng thái thiết bị.
      */
     private void handleDeviceStatus(String payload) {
         try {
             JsonNode json = objectMapper.readTree(payload);
 
-            String deviceCode = json.get("device").asText();
-            String status = json.get("status").asText();
+            String deviceCode = json.path("device").asText("");
+            String status = json.path("status").asText("");
+            String deviceStatus = json.path("device_status").asText("");
+            boolean legacyAck = "ON".equals(status) || "OFF".equals(status);
+            if (deviceCode.isBlank() || (!legacyAck && !List.of("success", "failed", "pending").contains(status))) {
+                log.warn("Bỏ qua phản hồi thiết bị có device/status không hợp lệ");
+                return;
+            }
+            if (!deviceStatus.isEmpty() && !List.of("ON", "OFF").contains(deviceStatus)) {
+                log.warn("Bỏ qua phản hồi có device_status không hợp lệ");
+                return;
+            }
 
-            // Tìm bản ghi history gần nhất đang PENDING/SENT của thiết bị này
+            // Ghép theo lệnh pending gần nhất; correlation ID triển khai ở giai đoạn điều khiển.
             historyRepository
                     .findTopByDeviceCodeAndStatusInOrderByCreatedAtDesc(
-                            deviceCode, Arrays.asList("PENDING", "SENT"))
+                            deviceCode, List.of(CommandStatus.PENDING.getValue()))
                     .ifPresentOrElse(
                             history -> {
-                                history.setStatus(status);
+                                String received = legacyAck ? status : deviceStatus;
+                                String result = status;
+                                if (legacyAck) {
+                                    result = history.getAction().equals(received)
+                                            ? CommandStatus.SUCCESS.getValue() : CommandStatus.FAILED.getValue();
+                                } else if (CommandStatus.SUCCESS.getValue().equals(status)) {
+                                    // ACK success không gửi trạng thái: thiết bị xác nhận đã thực hiện action.
+                                    if (received.isEmpty()) received = history.getAction();
+                                    if (!history.getAction().equals(received)) result = CommandStatus.FAILED.getValue();
+                                }
+                                history.setStatus(result);
+                                if (!received.isEmpty()) history.setStatusReceived(received);
                                 historyRepository.save(history);
-                                log.info("Cập nhật trạng thái {}: {} → {}", deviceCode, "PENDING/SENT", status);
+                                log.info("Kết quả lệnh {}: pending → {}", deviceCode, result);
                             },
-                            () -> log.warn("Không tìm thấy bản ghi PENDING/SENT cho thiết bị: {}", deviceCode)
+                            () -> log.warn("Không tìm thấy lệnh pending cho thiết bị: {}", deviceCode)
                     );
 
         } catch (Exception e) {

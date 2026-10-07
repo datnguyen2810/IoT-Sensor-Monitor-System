@@ -1,6 +1,9 @@
 package com.iot.backend.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import com.iot.backend.dto.response.ApiResponse;
+import jakarta.servlet.DispatcherType;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import com.iot.backend.security.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
@@ -17,7 +20,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
 
-import java.util.Map;
+import java.io.IOException;
 
 /**
  * Cấu hình Spring Security 7 cho ứng dụng IoT Backend.
@@ -53,6 +56,7 @@ public class SecurityConfig {
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .authorizeHttpRequests(auth -> auth
+                .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                 // Cho phép truy cập không cần xác thực
                 .requestMatchers("/api/auth/**").permitAll()
                 // Swagger UI & OpenAPI docs
@@ -64,20 +68,32 @@ public class SecurityConfig {
             // Trả JSON 401 theo chuẩn ApiResponse thay vì trang HTML mặc định khi chưa xác thực
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint((request, response, authException) -> {
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    response.setCharacterEncoding("UTF-8");
-                    com.iot.backend.dto.response.ApiResponse<Void> apiResponse =
-                            com.iot.backend.dto.response.ApiResponse.error(
-                                    HttpServletResponse.SC_UNAUTHORIZED,
-                                    "Token không hợp lệ hoặc đã hết hạn"
-                            );
-                    objectMapper.writeValue(response.getOutputStream(), apiResponse);
+                    writeError(response, HttpServletResponse.SC_UNAUTHORIZED,
+                            "Token không hợp lệ hoặc đã hết hạn");
                 })
+                .accessDeniedHandler((request, response, exception) ->
+                    writeError(response, HttpServletResponse.SC_FORBIDDEN,
+                            "Bạn không có quyền truy cập tài nguyên này"))
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    private void writeError(HttpServletResponse response, int status, String message) throws IOException {
+        response.setStatus(status);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
+        objectMapper.writeValue(response.getOutputStream(), ApiResponse.error(status, message));
+    }
+
+    @Bean
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration() {
+        // Chỉ chạy trong Security chain, sau khi SecurityContext được khởi tạo.
+        FilterRegistrationBean<JwtAuthenticationFilter> registration =
+                new FilterRegistrationBean<>(jwtAuthenticationFilter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean

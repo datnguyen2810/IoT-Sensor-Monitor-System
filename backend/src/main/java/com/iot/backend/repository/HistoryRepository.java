@@ -12,13 +12,13 @@ import java.util.Optional;
 public interface HistoryRepository extends JpaRepository<History, Integer>, JpaSpecificationExecutor<History> {
 
     /**
-     * Lấy bản ghi điều khiển mới nhất theo deviceId và tập hợp trạng thái (ví dụ: ON, OFF)
-     * Phục vụ API /api/devices/status
+     * Lấy lệnh gần nhất theo deviceId và kết quả success/failed/pending.
+     * Khi cần trạng thái thiết bị, đọc statusReceived của lệnh đã xác nhận.
      */
     Optional<History> findTopByDeviceIdAndStatusInOrderByCreatedAtDesc(Integer deviceId, Collection<String> statuses);
 
     /**
-     * Lấy bản ghi điều khiển mới nhất theo deviceCode (led/fan/ac) và tập hợp trạng thái (ví dụ: ON, OFF)
+     * Lấy lệnh gần nhất theo deviceCode và kết quả success/failed/pending.
      */
     Optional<History> findTopByDeviceCodeAndStatusInOrderByCreatedAtDesc(String deviceCode, Collection<String> statuses);
 

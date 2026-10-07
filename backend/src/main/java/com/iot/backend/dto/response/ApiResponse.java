@@ -1,10 +1,8 @@
 package com.iot.backend.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 
-import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
@@ -18,7 +16,7 @@ import java.util.Map;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonInclude(JsonInclude.Include.ALWAYS)
 public class ApiResponse<T> {
 
     private int status;
@@ -27,20 +25,21 @@ public class ApiResponse<T> {
 
     private T data;
 
-    private Map<String, String> errors;
-
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    private LocalDateTime timestamp;
-
     /**
      * Tạo response thành công kèm thông điệp và dữ liệu.
      */
     public static <T> ApiResponse<T> success(String message, T data) {
+        return success(200, message, data);
+    }
+
+    public static <T> ApiResponse<T> success(int status, String message, T data) {
+        if (status < 200 || status >= 300) {
+            throw new IllegalArgumentException("Success status must be a 2xx HTTP status");
+        }
         return ApiResponse.<T>builder()
-                .status(200)
+                .status(status)
                 .message(message)
                 .data(data)
-                .timestamp(LocalDateTime.now())
                 .build();
     }
 
@@ -59,20 +58,17 @@ public class ApiResponse<T> {
                 .status(status)
                 .message(message)
                 .data(null)
-                .timestamp(LocalDateTime.now())
                 .build();
     }
 
     /**
      * Tạo response lỗi validation kèm chi tiết các trường bị lỗi.
      */
-    public static <T> ApiResponse<T> validationError(Map<String, String> errors) {
-        return ApiResponse.<T>builder()
+    public static ApiResponse<Map<String, String>> validationError(Map<String, String> errors) {
+        return ApiResponse.<Map<String, String>>builder()
                 .status(400)
                 .message("Dữ liệu đầu vào không hợp lệ")
-                .errors(errors)
-                .data(null)
-                .timestamp(LocalDateTime.now())
+                .data(errors)
                 .build();
     }
 }

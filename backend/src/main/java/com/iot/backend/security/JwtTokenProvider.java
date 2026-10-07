@@ -84,14 +84,8 @@ public class JwtTokenProvider {
                     .build()
                     .parseSignedClaims(token);
             return true;
-        } catch (SecurityException | MalformedJwtException e) {
-            // Token không hợp lệ hoặc chữ ký sai
-        } catch (ExpiredJwtException e) {
-            // Token hết hạn
-        } catch (UnsupportedJwtException e) {
-            // Token không được hỗ trợ
-        } catch (IllegalArgumentException e) {
-            // Token rỗng
+        } catch (JwtException | IllegalArgumentException e) {
+            // Bao gồm sai chữ ký, hết hạn, JSON hỏng và token rỗng.
         }
         return false;
     }
