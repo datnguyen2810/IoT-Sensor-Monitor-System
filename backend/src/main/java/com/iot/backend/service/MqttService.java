@@ -17,6 +17,7 @@ import org.eclipse.paho.client.mqttv3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -31,6 +32,7 @@ import java.util.List;
  * Triển khai MqttCallbackExtended để tự động subscribe lại khi reconnect.
  */
 @Service
+@ConditionalOnProperty(name = "mqtt.enabled", havingValue = "true", matchIfMissing = true)
 public class MqttService implements MqttCallbackExtended {
 
     private static final Logger log = LoggerFactory.getLogger(MqttService.class);

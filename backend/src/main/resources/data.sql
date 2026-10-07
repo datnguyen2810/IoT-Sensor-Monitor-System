@@ -15,4 +15,4 @@ INSERT IGNORE INTO devices (id, code, name) VALUES (2, 'fan', 'Quạt');
 INSERT IGNORE INTO devices (id, code, name) VALUES (3, 'ac', 'Điều hoà');
 
 -- Bang user: tai khoan mac dinh (mat khau: 123456, ma hoa BCrypt)
-INSERT IGNORE INTO user (id, username, password) VALUES (1, 'admin', '$2a$10$lgsNZJy5jcNwrAD0zPzRMO/Q7eQYiNgmSZQ.e9kjhIF3xgD0Cge.K');
+INSERT IGNORE INTO `user` (id, username, password) VALUES (1, 'admin', '$2a$10$lgsNZJy5jcNwrAD0zPzRMO/Q7eQYiNgmSZQ.e9kjhIF3xgD0Cge.K');

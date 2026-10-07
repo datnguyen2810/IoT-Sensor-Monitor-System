@@ -4,12 +4,14 @@ import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 /**
  * Cấu hình tham số kết nối MQTT Mosquitto Broker.
  * Đọc từ application.properties: mqtt.broker.url, mqtt.client.id, mqtt.username, mqtt.password.
  */
 @Configuration
+@ConditionalOnProperty(name = "mqtt.enabled", havingValue = "true", matchIfMissing = true)
 public class MqttConfig {
 
     @Value("${mqtt.broker.url}")

@@ -64,6 +64,13 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- Database trong RAM chỉ dùng khi test -->
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>test</scope>
+		</dependency>
+
 		<!-- Eclipse Paho MQTT Client để kết nối Mosquitto Broker -->
 		<dependency>
 			<groupId>org.eclipse.paho</groupId>
