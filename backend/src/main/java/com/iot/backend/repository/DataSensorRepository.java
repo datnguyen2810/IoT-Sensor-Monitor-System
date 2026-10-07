@@ -28,10 +28,20 @@ public interface DataSensorRepository extends JpaRepository<DataSensor, Integer>
     @Query("SELECT DISTINCT d.createdAt FROM DataSensor d ORDER BY d.createdAt DESC")
     Page<LocalDateTime> findDistinctRecentCreatedAt(Pageable pageable);
 
+    /** Chỉ lấy các lần đo đủ ba sensor; loại timestamp có bản ghi trùng để tránh ghép sai. */
+    @Query("""
+            SELECT d.createdAt FROM DataSensor d
+            WHERE d.sensor.id IN (1, 2, 3)
+            GROUP BY d.createdAt
+            HAVING COUNT(d) = 3 AND COUNT(DISTINCT d.sensor.id) = 3
+            ORDER BY d.createdAt DESC
+            """)
+    List<LocalDateTime> findCompleteMeasurementTimes(Pageable pageable);
+
     /**
      * Lấy danh sách các bản ghi tương ứng với tập hợp các mốc thời gian
      */
-    @Query("SELECT d FROM DataSensor d JOIN FETCH d.sensor WHERE d.createdAt IN :timestamps ORDER BY d.createdAt ASC")
+    @Query("SELECT d FROM DataSensor d JOIN FETCH d.sensor WHERE d.sensor.id IN (1, 2, 3) AND d.createdAt IN :timestamps ORDER BY d.createdAt ASC, d.id ASC")
     List<DataSensor> findByCreatedAtInOrderByCreatedAtAsc(@Param("timestamps") Collection<LocalDateTime> timestamps);
 
     /**

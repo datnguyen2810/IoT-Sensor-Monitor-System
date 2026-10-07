@@ -6,7 +6,10 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "datasensors")
+@Table(name = "datasensors", indexes = {
+        @Index(name = "idx_datasensors_created_id", columnList = "created_at,id"),
+        @Index(name = "idx_datasensors_sensor_created", columnList = "sensor_id,created_at")
+})
 @Getter
 @Setter
 @NoArgsConstructor

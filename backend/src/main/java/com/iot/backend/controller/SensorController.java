@@ -6,6 +6,10 @@ import com.iot.backend.dto.response.SensorChartResponse;
 import com.iot.backend.dto.response.SensorHistoryResponse;
 import com.iot.backend.dto.response.SensorLatestResponse;
 import com.iot.backend.service.SensorService;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,7 +38,8 @@ public class SensorController {
     @GetMapping("/latest")
     public ResponseEntity<ApiResponse<SensorLatestResponse>> getLatestData() {
         SensorLatestResponse data = sensorService.getLatestData();
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ResponseEntity.ok(ApiResponse.success(
+                data == null ? "Chưa có dữ liệu cảm biến" : "Lấy dữ liệu cảm biến mới nhất thành công", data));
     }
 
     /**
@@ -59,12 +64,15 @@ public class SensorController {
      */
     @GetMapping("/history")
     public ResponseEntity<ApiResponse<PageResponse<SensorHistoryResponse>>> getHistory(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int limit,
-            @RequestParam(required = false, name = "sensor_type") String sensorType,
-            @RequestParam(required = false) String search,
-            @RequestParam(defaultValue = "desc") String sort) {
-        PageResponse<SensorHistoryResponse> data = sensorService.getHistory(page, limit, sensorType, search, sort);
+            @RequestParam(defaultValue = "1") @Min(1) int page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int limit,
+            @RequestParam(defaultValue = "", name = "sensor_type")
+            @Pattern(regexp = "|Nhiệt Độ|Độ Ẩm|Ánh Sáng") String sensorType,
+            @RequestParam(defaultValue = "") @Size(max = 100) String search,
+            @RequestParam(defaultValue = "", name = "search_type")
+            @Pattern(regexp = "|time|value") String searchType,
+            @RequestParam(defaultValue = "desc") @Pattern(regexp = "asc|desc") String sort) {
+        PageResponse<SensorHistoryResponse> data = sensorService.getHistory(page, limit, sensorType, search, searchType, sort);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 }
