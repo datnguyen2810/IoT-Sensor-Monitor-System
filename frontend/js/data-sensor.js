@@ -116,7 +116,7 @@ async function loadSensorHistory() {
     }
 
     totalRecords = filtered.length;
-    totalPages = Math.max(10, Math.ceil(totalRecords / limit));
+    totalPages = Math.ceil(totalRecords / limit);
     const pagedItems = filtered.slice((currentPage - 1) * limit, currentPage * limit);
     renderTableData(pagedItems.length > 0 ? pagedItems : filtered.slice(0, limit));
     renderPagination(totalPages, currentPage);

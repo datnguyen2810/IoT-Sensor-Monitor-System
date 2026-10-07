@@ -130,8 +130,8 @@ async function apiRequest(endpoint, options = {}) {
       showToast('Yêu cầu hết thời gian chờ (Timeout 10s)!', 'error');
       throw new Error('Request Timeout');
     }
-    // Không bắn toast nếu là endpoint polling ngầm để tránh spam màn hình
-    if (!endpoint.includes('/latest')) {
+    // Không bắn toast nếu là endpoint polling ngầm hoặc caller muốn tự xử lý (silent)
+    if (!endpoint.includes('/latest') && !options.silent) {
       showToast(error.message || 'Lỗi kết nối đến máy chủ Backend!', 'error');
     }
     throw error;

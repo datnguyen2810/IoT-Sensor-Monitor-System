@@ -990,6 +990,28 @@ body.login-body {
   background-color: rgba(238, 93, 80, 0.12);
 }
 
+.user-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background-color: #F4F7FE;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: 0.2px;
+  border: 1px solid rgba(67, 24, 255, 0.08);
+}
+
+.user-cell-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--primary);
+  opacity: 0.9;
+}
+
 .table-empty {
   padding: 40px;
   text-align: center;

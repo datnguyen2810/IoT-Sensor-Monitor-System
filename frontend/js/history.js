@@ -55,7 +55,7 @@ async function loadDeviceHistory() {
     } else {
       tbody.innerHTML = `
         <tr>
-          <td colspan="5" class="table-empty">Không tìm thấy bản ghi lịch sử điều khiển nào.</td>
+          <td colspan="6" class="table-empty">Không tìm thấy bản ghi lịch sử điều khiển nào.</td>
         </tr>
       `;
       renderPagination(1, 1);
@@ -64,18 +64,18 @@ async function loadDeviceHistory() {
     console.warn('Backend offline, hiển thị dữ liệu mẫu cho history:', error.message);
     // Dữ liệu mẫu
     let mockData = [
-      { id: 1, device_name: "Điều hoà", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 16:44:14" },
-      { id: 2, device_name: "Điều hoà", action_sent: "OFF", status_received: "OFF", executed_at: "2026-08-16 16:44:35" },
-      { id: 3, device_name: "Đèn LED", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 10:59:45" },
-      { id: 4, device_name: "Quạt", action_sent: "OFF", status_received: "OFF", executed_at: "2026-08-16 10:59:48" },
-      { id: 5, device_name: "Đèn LED", action_sent: "OFF", status_received: "OFF", executed_at: "2026-08-16 10:59:54" },
-      { id: 6, device_name: "Điều hoà", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 11:45:55" },
-      { id: 7, device_name: "Quạt", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 11:46:02" },
-      { id: 8, device_name: "Đèn LED", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 11:47:10" },
-      { id: 9, device_name: "Điều hoà", action_sent: "OFF", status_received: "OFF", executed_at: "2026-08-16 11:50:22" },
-      { id: 10, device_name: "Quạt", action_sent: "OFF", status_received: "OFF", executed_at: "2026-08-16 11:55:00" },
-      { id: 11, device_name: "Đèn LED", action_sent: "OFF", status_received: "OFF", executed_at: "2026-08-16 12:00:15" },
-      { id: 12, device_name: "Điều hoà", action_sent: "ON", status_received: "ON", executed_at: "2026-08-16 12:05:30" }
+      { id: 1, device_name: "Điều hoà", action_sent: "ON", status_received: "ON", operator: "Admin", executed_at: "2026-08-16 16:44:14" },
+      { id: 2, device_name: "Điều hoà", action_sent: "OFF", status_received: "OFF", operator: "Admin", executed_at: "2026-08-16 16:44:35" },
+      { id: 3, device_name: "Đèn LED", action_sent: "ON", status_received: "ON", operator: "datnguyen", executed_at: "2026-08-16 10:59:45" },
+      { id: 4, device_name: "Quạt", action_sent: "OFF", status_received: "OFF", operator: "datnguyen", executed_at: "2026-08-16 10:59:48" },
+      { id: 5, device_name: "Đèn LED", action_sent: "OFF", status_received: "OFF", operator: "Admin", executed_at: "2026-08-16 10:59:54" },
+      { id: 6, device_name: "Điều hoà", action_sent: "ON", status_received: "ON", operator: "Hệ thống (Auto)", executed_at: "2026-08-16 11:45:55" },
+      { id: 7, device_name: "Quạt", action_sent: "ON", status_received: "ON", operator: "Admin", executed_at: "2026-08-16 11:46:02" },
+      { id: 8, device_name: "Đèn LED", action_sent: "ON", status_received: "ON", operator: "datnguyen", executed_at: "2026-08-16 11:47:10" },
+      { id: 9, device_name: "Điều hoà", action_sent: "OFF", status_received: "OFF", operator: "Hệ thống (Auto)", executed_at: "2026-08-16 11:50:22" },
+      { id: 10, device_name: "Quạt", action_sent: "OFF", status_received: "OFF", operator: "Admin", executed_at: "2026-08-16 11:55:00" },
+      { id: 11, device_name: "Đèn LED", action_sent: "OFF", status_received: "OFF", operator: "datnguyen", executed_at: "2026-08-16 12:00:15" },
+      { id: 12, device_name: "Điều hoà", action_sent: "ON", status_received: "ON", operator: "Admin", executed_at: "2026-08-16 12:05:30" }
     ];
 
     // Lọc theo thiết bị
@@ -90,9 +90,13 @@ async function loadDeviceHistory() {
     if (status) {
       mockData = mockData.filter(item => (item.status_received || item.status) === status);
     }
-    // Tìm kiếm theo thời gian
+    // Tìm kiếm theo thời gian hoặc người điều khiển
     if (search) {
-      mockData = mockData.filter(item => (item.executed_at || '').includes(search));
+      const searchLower = search.toLowerCase();
+      mockData = mockData.filter(item => 
+        (item.executed_at || '').toLowerCase().includes(searchLower) ||
+        (item.operator || '').toLowerCase().includes(searchLower)
+      );
     }
     // Sắp xếp
     if (sort === 'asc') {
@@ -102,7 +106,7 @@ async function loadDeviceHistory() {
     }
 
     totalRecords = mockData.length;
-    totalPages = Math.max(10, Math.ceil(totalRecords / limit));
+    totalPages = Math.ceil(totalRecords / limit);
     const pagedItems = mockData.slice((currentPage - 1) * limit, currentPage * limit);
     renderTableData(pagedItems.length > 0 ? pagedItems : mockData.slice(0, limit));
     renderPagination(totalPages, currentPage);
@@ -119,7 +123,7 @@ function renderTableData(items) {
   if (items.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="table-empty">Không có dữ liệu hiển thị.</td>
+        <td colspan="6" class="table-empty">Không có dữ liệu hiển thị.</td>
       </tr>
     `;
     return;
@@ -130,6 +134,7 @@ function renderTableData(items) {
     const status = item.status_received || item.status || '--';
     const statusClass = (status.toUpperCase() === 'ON') ? 'on' : 'off';
     const time = item.executed_at || item.created_at || item.timestamp || '--';
+    const operator = item.operator || item.username || item.user || item.controlled_by || 'Admin';
 
     return `
       <tr>
@@ -138,6 +143,14 @@ function renderTableData(items) {
         <td style="font-weight: 700;">${action}</td>
         <td>
           <span class="badge-status ${statusClass}">${status}</span>
+        </td>
+        <td>
+          <span class="user-cell">
+            <svg class="user-cell-icon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+            <span>${operator}</span>
+          </span>
         </td>
         <td>${time}</td>
       </tr>
