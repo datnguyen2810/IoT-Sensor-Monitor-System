@@ -4,8 +4,15 @@ import com.iot.backend.dto.request.DeviceControlRequest;
 import com.iot.backend.dto.response.ApiResponse;
 import com.iot.backend.dto.response.DeviceControlResponse;
 import com.iot.backend.dto.response.DeviceStatusResponse;
+import com.iot.backend.dto.response.DeviceHistoryResponse;
+import com.iot.backend.dto.response.PageResponse;
+import com.iot.backend.service.DeviceHistoryService;
 import com.iot.backend.service.DeviceService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -15,7 +22,26 @@ import java.util.List;
 @RequestMapping("/api/devices")
 public class DeviceController {
     private final DeviceService service;
-    public DeviceController(DeviceService service) { this.service = service; }
+    private final DeviceHistoryService historyService;
+    public DeviceController(DeviceService service, DeviceHistoryService historyService) {
+        this.service = service;
+        this.historyService = historyService;
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<ApiResponse<PageResponse<DeviceHistoryResponse>>> history(
+            @RequestParam(defaultValue = "1") @Min(1) int page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int limit,
+            @RequestParam(defaultValue = "") @Pattern(regexp = "|Đèn LED|Quạt|Điều hoà") String device,
+            @RequestParam(defaultValue = "") @Pattern(regexp = "|ON|OFF") String action,
+            @RequestParam(defaultValue = "") @Pattern(regexp = "|ON|OFF") String status,
+            @RequestParam(name = "command_status", defaultValue = "")
+            @Pattern(regexp = "|success|failed|pending") String commandStatus,
+            @RequestParam(defaultValue = "") @Size(max = 100) String search,
+            @RequestParam(defaultValue = "desc") @Pattern(regexp = "asc|desc") String sort) {
+        return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử thiết bị thành công",
+                historyService.getHistory(page, limit, device, action, status, commandStatus, search, sort)));
+    }
 
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<List<DeviceStatusResponse>>> status() {

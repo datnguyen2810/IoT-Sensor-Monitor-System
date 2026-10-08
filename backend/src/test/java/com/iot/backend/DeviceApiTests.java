@@ -4,6 +4,7 @@ import com.iot.backend.dto.mqtt.DeviceAcknowledgement;
 import com.iot.backend.dto.request.DeviceControlRequest;
 import com.iot.backend.entity.Device;
 import com.iot.backend.entity.History;
+import com.iot.backend.entity.User;
 import com.iot.backend.repository.*;
 import com.iot.backend.security.JwtTokenProvider;
 import com.iot.backend.service.*;
@@ -14,6 +15,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -43,6 +46,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 public class DeviceApiTests {
     @Autowired DeviceService service;
+    @Autowired DeviceHistoryService historyService;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired Environment environment;
     @Autowired DeviceCommandTransactions commands;
     @Autowired HistoryRepository histories;
     @Autowired DeviceRepository devices;
@@ -55,6 +61,9 @@ public class DeviceApiTests {
     @BeforeEach
     void prepare() {
         histories.deleteAll();
+        if (environment.getProperty("spring.datasource.url", "").startsWith("jdbc:h2:")) {
+            jdbc.execute("CREATE ALIAS IF NOT EXISTS date_format FOR 'com.iot.backend.SensorApiTests.mysqlDateFormat'");
+        }
         for (String code : List.of("led", "fan", "ac")) {
             if (!devices.existsByCode(code)) devices.saveAndFlush(Device.builder().code(code).name(code).build());
         }
@@ -263,5 +272,129 @@ public class DeviceApiTests {
         mvc.perform(get("/api/devices/status")).andExpect(status().isUnauthorized());
         mvc.perform(post("/api/devices/control").contentType("application/json")
                 .content("{\"device\":\"led\",\"action\":\"ON\"}")).andExpect(status().isUnauthorized());
+    }
+
+    private static final LocalDateTime HISTORY_TIME = LocalDateTime.of(2026, 10, 7, 10, 30, 15);
+
+    private History history(String code, String action, String outcome, String received,
+                            boolean automatic, LocalDateTime time) {
+        return histories.saveAndFlush(History.builder().device(devices.findByCode(code).orElseThrow())
+                .user(automatic ? null : users.findByUsername("admin").orElseThrow())
+                .action(action).status(outcome).statusReceived(received).createdAt(time).build());
+    }
+
+    @Test
+    void historyMapsExistingColumnsAndRetainsNullAckAndAutomaticOperator() throws Exception {
+        var pending = history("led", "ON", "pending", null, true, HISTORY_TIME);
+        var response = mvc.perform(get("/api/devices/history").header("Authorization", "Bearer " + token()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data.data[0].id").value(pending.getId()))
+                .andExpect(jsonPath("$.data.data[0].command_id").value(pending.getId()))
+                .andExpect(jsonPath("$.data.data[0].device_name").value(pending.getDevice().getName()))
+                .andExpect(jsonPath("$.data.data[0].action_sent").value("ON"))
+                .andExpect(jsonPath("$.data.data[0].command_status").value("pending"))
+                .andExpect(jsonPath("$.data.data[0].operator").value("Hệ thống (Auto)"))
+                .andExpect(jsonPath("$.data.data[0].executed_at").value("2026-10-07T10:30:15+07:00"))
+                .andReturn();
+        var json = mapper.readTree(response.getResponse().getContentAsString());
+        assertThat(json.size()).isEqualTo(3);
+        assertThat(json.get("data").get("data").get(0).has("status_received")).isTrue();
+        assertThat(json.get("data").get("data").get(0).get("status_received").isNull()).isTrue();
+    }
+
+    @Test
+    void historyCombinesFiltersAndCountQueryWithoutConfusingOutcomeWithActualState() throws Exception {
+        history("led", "ON", "success", "ON", false, HISTORY_TIME);
+        var failed = history("led", "ON", "failed", "OFF", false, HISTORY_TIME);
+        history("fan", "ON", "failed", "OFF", false, HISTORY_TIME);
+        history("led", "OFF", "failed", "OFF", false, HISTORY_TIME);
+        mvc.perform(get("/api/devices/history").header("Authorization", "Bearer " + token())
+                        .param("device", "Đèn LED").param("action", "ON").param("status", "OFF")
+                        .param("command_status", "failed").param("limit", "1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total_records").value(1))
+                .andExpect(jsonPath("$.data.data[0].id").value(failed.getId()));
+        assertThat(historyService.getHistory(1, 1, "", "", "", "failed", "", "desc").getTotalRecords()).isEqualTo(3);
+    }
+
+    @Test
+    void historySortsByTimeThenIdAndPagesBeyondEndStayEmpty() {
+        var first = history("fan", "ON", "success", "ON", false, HISTORY_TIME.plusDays(1));
+        var older = history("led", "ON", "success", "ON", false, HISTORY_TIME);
+        var third = history("ac", "ON", "success", "ON", false, HISTORY_TIME.plusDays(1));
+        var asc = historyService.getHistory(1, 10, "", "", "", "", "", "asc");
+        assertThat(asc.getData()).extracting(item -> item.id()).containsExactly(older.getId(), first.getId(), third.getId());
+        var page = historyService.getHistory(2, 1, "", "", "", "", "", "desc");
+        assertThat(page.getData()).extracting(item -> item.id()).containsExactly(first.getId());
+        assertThat(page.getTotalRecords()).isEqualTo(3);
+        assertThat(page.getTotalPages()).isEqualTo(3);
+        var beyond = historyService.getHistory(4, 1, "", "", "", "", "", "desc");
+        assertThat(beyond.getData()).isEmpty();
+        assertThat(beyond.getCurrentPage()).isEqualTo(4);
+    }
+
+    @Test
+    void historyEmptyResultAlwaysHasOnePage() throws Exception {
+        mvc.perform(get("/api/devices/history").header("Authorization", "Bearer " + token()).param("page", "9"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.data.length()").value(0))
+                .andExpect(jsonPath("$.data.total_records").value(0))
+                .andExpect(jsonPath("$.data.total_pages").value(1)).andExpect(jsonPath("$.data.current_page").value(1));
+    }
+
+    @Test
+    void historySearchesUsernameAndAutomaticOperatorCaseInsensitively() {
+        history("led", "ON", "success", "ON", false, HISTORY_TIME);
+        var automatic = history("fan", "OFF", "pending", null, true, HISTORY_TIME);
+        var admin = historyService.getHistory(1, 10, "", "", "", "", " ADMIN ", "desc");
+        assertThat(admin.getTotalRecords()).isEqualTo(1);
+        assertThat(admin.getData().getFirst().operator()).isEqualTo("admin");
+        assertThat(historyService.getHistory(1, 10, "", "", "", "", "auto", "desc").getData())
+                .extracting(item -> item.id()).containsExactly(automatic.getId());
+    }
+
+    @Test
+    void historySearchesExactDateBoundariesAndPartialTime() {
+        history("led", "ON", "pending", null, true, HISTORY_TIME.toLocalDate().atStartOfDay().minusSeconds(1));
+        history("led", "ON", "pending", null, true, HISTORY_TIME.toLocalDate().atStartOfDay());
+        history("led", "ON", "pending", null, true, HISTORY_TIME);
+        history("led", "ON", "pending", null, true, HISTORY_TIME.toLocalDate().plusDays(1).atStartOfDay());
+        assertThat(historyService.getHistory(1, 1, "", "", "", "", "2026-10-07", "asc").getTotalRecords()).isEqualTo(2);
+        assertThat(historyService.getHistory(1, 10, "", "", "", "", "10:30", "desc").getTotalRecords()).isEqualTo(1);
+        assertThat(historyService.getHistory(1, 10, "", "", "", "", "2026-02-30", "desc").getData()).isEmpty();
+    }
+
+    @Test
+    void historySearchEscapesWildcardsAndBindsQuotes() {
+        var special = users.saveAndFlush(User.builder().username("history%_!O'Neil").password("unused-test-value").build());
+        try {
+            var h = history("led", "ON", "pending", null, false, HISTORY_TIME);
+            h.setUser(special); histories.saveAndFlush(h);
+            history("fan", "ON", "pending", null, false, HISTORY_TIME);
+            for (String keyword : List.of("%", "_", "!", "O'Neil")) {
+                assertThat(historyService.getHistory(1, 1, "", "", "", "", keyword, "desc").getTotalRecords()).isEqualTo(1);
+            }
+            assertThat(historyService.getHistory(1, 10, "", "", "", "", "' OR 1=1 --", "desc").getData()).isEmpty();
+        } finally {
+            histories.deleteAll(); users.delete(special);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"page=0", "page=bad", "limit=0", "limit=101", "device=led", "action=on",
+            "status=success", "command_status=ON", "sort=invalid"})
+    void historyRejectsInvalidQuery(String query) throws Exception {
+        String[] parts = query.split("=", 2);
+        mvc.perform(get("/api/devices/history").header("Authorization", "Bearer " + token()).param(parts[0], parts[1]))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void historyRejectsOversizedSearchAndRequiresJwt() throws Exception {
+        mvc.perform(get("/api/devices/history").header("Authorization", "Bearer " + token()).param("search", "x".repeat(101)))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/devices/history")).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.status").value(401));
+        mvc.perform(get("/api/devices/history").header("Authorization", "Bearer invalid"))
+                .andExpect(status().isUnauthorized());
+        assertThatThrownBy(() -> historyService.getHistory(0, 10, "", "", "", "", "", "desc"))
+                .isInstanceOf(ResponseStatusException.class);
     }
 }
