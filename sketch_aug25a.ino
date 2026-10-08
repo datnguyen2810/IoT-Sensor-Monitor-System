@@ -58,23 +58,45 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Nhan lenh: ");
   Serial.println(messageTemp);
 
-  // Parse JSON: {"device": "led"|"fan"|"ac", "cmd": "ON"|"OFF"}
+  // command_id là History.id; giữ hỗ trợ lệnh cũ chưa có ID.
+  // {"device":"led"|"fan"|"ac", "cmd":"ON"|"OFF", "command_id":12}
   StaticJsonDocument<200> doc;
   DeserializationError error = deserializeJson(doc, messageTemp);
   if (!error) {
     String device = doc["device"].as<String>();
     String cmd = doc["cmd"].as<String>();
+    if (cmd != "ON" && cmd != "OFF") {
+      Serial.println("Bo qua lenh co cmd khong hop le");
+      return;
+    }
+    bool hasCommandId = doc.containsKey("command_id");
+    if (hasCommandId && (!doc["command_id"].is<int>() || doc["command_id"].as<int>() <= 0)) {
+      Serial.println("Bo qua lenh co command_id khong hop le");
+      return;
+    }
     int state = (cmd == "ON") ? HIGH : LOW;
 
     if (device == "led") {
       digitalWrite(LED_PIN, state);
-      client.publish("iot/status", ("{\"device\": \"led\", \"status\": \"" + cmd + "\"}").c_str());
     } else if (device == "fan") {
       digitalWrite(FAN_PIN, state);
-      client.publish("iot/status", ("{\"device\": \"fan\", \"status\": \"" + cmd + "\"}").c_str());
     } else if (device == "ac") {
       digitalWrite(AC_PIN, state);
-      client.publish("iot/status", ("{\"device\": \"ac\", \"status\": \"" + cmd + "\"}").c_str());
+    } else {
+      Serial.println("Bo qua lenh co device khong hop le");
+      return;
+    }
+
+    StaticJsonDocument<200> ack;
+    ack["device"] = device;
+    ack["status"] = cmd; // ON/OFF vẫn là trạng thái thiết bị, không phải kết quả lệnh trong DB.
+    if (hasCommandId) {
+      ack["command_id"] = doc["command_id"].as<int>();
+    }
+    char buffer[256];
+    serializeJson(ack, buffer);
+    if (!client.publish("iot/status", buffer, false)) {
+      Serial.println("Khong gui duoc ACK MQTT");
     }
   }
 }

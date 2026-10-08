@@ -1,7 +1,7 @@
 package com.iot.backend;
 
 import com.iot.backend.dto.mqtt.SensorMeasurementPayload;
-import com.iot.backend.repository.HistoryRepository;
+import com.iot.backend.service.DeviceCommandTransactions;
 import com.iot.backend.service.MqttService;
 import com.iot.backend.service.SensorMeasurementService;
 import org.eclipse.paho.client.mqttv3.*;
@@ -53,7 +53,7 @@ class MqttBrokerTests {
             return result;
         }).when(client).subscribe(any(String[].class), any(int[].class));
         var mqtt = spy(new MqttService(client, options, JsonMapper.builder().build(), persistence,
-                mock(HistoryRepository.class), executor));
+                mock(DeviceCommandTransactions.class), executor));
         doAnswer(invocation -> {
             invocation.callRealMethod();
             lost.countDown();

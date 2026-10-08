@@ -4,7 +4,7 @@ import com.iot.backend.entity.DataSensor;
 import com.iot.backend.dto.mqtt.SensorMeasurementPayload;
 import com.iot.backend.service.SensorMeasurementService;
 import com.iot.backend.service.MqttService;
-import com.iot.backend.repository.HistoryRepository;
+import com.iot.backend.service.DeviceCommandTransactions;
 import org.eclipse.paho.client.mqttv3.IMqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
@@ -48,7 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.jpa.hibernate.ddl-auto=create-drop", "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
         "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect", "spring.jpa.show-sql=false",
         "spring.jpa.open-in-view=false", "spring.jpa.defer-datasource-initialization=true",
-        "spring.sql.init.mode=always", "mqtt.enabled=false"
+        "spring.sql.init.mode=always", "mqtt.enabled=false", "devices.command.timeout-scheduler.enabled=false"
 })
 @AutoConfigureMockMvc
 @Transactional
@@ -83,7 +83,7 @@ public class SensorApiTests {
     @Test
     void mqttPayloadCreatesExactlyThreeRowsReadableByLatestAndChart() {
         var mqtt = new MqttService(mock(IMqttClient.class), new MqttConnectOptions(), mapper, ingestion,
-                mock(HistoryRepository.class), mock(ScheduledExecutorService.class));
+                mock(DeviceCommandTransactions.class), mock(ScheduledExecutorService.class));
         var message = new MqttMessage("{\"temperature\":28.5,\"humidity\":65,\"light\":0}"
                 .getBytes(StandardCharsets.UTF_8));
         mqtt.messageArrived("iot/sensor/data", message);

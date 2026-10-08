@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.jpa.defer-datasource-initialization=true",
         "spring.sql.init.mode=always",
         "spring.sql.init.data-locations=classpath:data.sql",
-        "mqtt.enabled=false"
+        "mqtt.enabled=false", "devices.command.timeout-scheduler.enabled=false"
 })
 @AutoConfigureMockMvc
 class BackendApplicationTests {
@@ -57,6 +57,17 @@ class BackendApplicationTests {
         assertThat(context.getBeansOfType(MqttConfig.class)).isEmpty();
         assertThat(context.getEnvironment().getProperty("spring.datasource.url")).startsWith("jdbc:h2:mem:");
         assertThat(context.getEnvironment().getActiveProfiles()).isEmpty();
+    }
+
+    @Test
+    void deviceStatusWorksWhenMqttBeanIsDisabledButControlReturns503() throws Exception {
+        String token = jwtTokenProvider.generateTokenFromUsername("admin");
+        mvc.perform(get("/api/devices/status").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(3));
+        mvc.perform(post("/api/devices/control").header("Authorization", "Bearer " + token)
+                        .contentType("application/json").content("{\"device\":\"led\",\"action\":\"ON\"}"))
+                .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.status").value(503))
+                .andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test

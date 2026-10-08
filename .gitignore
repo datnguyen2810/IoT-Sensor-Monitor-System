@@ -55,3 +55,8 @@ build/
 
 report/
 BACKEND_PLAN.md
+
+# AI agent context (local only)
+AGENTS.md
+CLAUDE.md
+docs/STATUS.md

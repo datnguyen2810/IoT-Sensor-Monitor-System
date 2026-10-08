@@ -1,8 +1,7 @@
 package com.iot.backend.service;
 
 import com.iot.backend.dto.mqtt.SensorMeasurementPayload;
-import com.iot.backend.entity.CommandStatus;
-import com.iot.backend.repository.HistoryRepository;
+import com.iot.backend.dto.mqtt.DeviceAcknowledgement;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.eclipse.paho.client.mqttv3.*;
@@ -10,14 +9,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -34,7 +31,7 @@ public class MqttService implements MqttCallbackExtended {
     private final MqttConnectOptions mqttConnectOptions;
     private final ObjectMapper objectMapper;
     private final SensorMeasurementService measurements;
-    private final HistoryRepository historyRepository;
+    private final DeviceCommandTransactions commands;
     private final ScheduledExecutorService connectionExecutor;
     private volatile boolean stopping;
     private volatile boolean subscribed;
@@ -42,12 +39,12 @@ public class MqttService implements MqttCallbackExtended {
 
     public MqttService(IMqttClient mqttClient, MqttConnectOptions mqttConnectOptions,
                        ObjectMapper objectMapper, SensorMeasurementService measurements,
-                       HistoryRepository historyRepository, ScheduledExecutorService connectionExecutor) {
+                       DeviceCommandTransactions commands, ScheduledExecutorService connectionExecutor) {
         this.mqttClient = mqttClient;
         this.mqttConnectOptions = mqttConnectOptions;
         this.objectMapper = objectMapper;
         this.measurements = measurements;
-        this.historyRepository = historyRepository;
+        this.commands = commands;
         this.connectionExecutor = connectionExecutor;
     }
 
@@ -148,8 +145,14 @@ public class MqttService implements MqttCallbackExtended {
         log.debug("MQTT published on {}", topic);
     }
 
-    public void publishDeviceControl(String deviceCode, String action) throws MqttException {
-        publish(TOPIC_DEVICE_CONTROL, objectMapper.writeValueAsString(Map.of("device", deviceCode, "cmd", action)));
+    public boolean isReadyForControl() {
+        return !stopping && subscribed && mqttClient.isConnected();
+    }
+
+    public void publishDeviceControl(String deviceCode, String action, Integer commandId) throws MqttException {
+        if (commandId == null || commandId <= 0) throw new IllegalArgumentException("Invalid command ID");
+        publish(TOPIC_DEVICE_CONTROL, objectMapper.writeValueAsString(
+                Map.of("device", deviceCode, "cmd", action, "command_id", commandId)));
     }
 
     private void handleSensorData(String payload) {
@@ -170,50 +173,15 @@ public class MqttService implements MqttCallbackExtended {
         }
     }
 
-    // Existing ACK behavior remains unchanged; command correlation belongs to phase 5.
     private void handleDeviceStatus(String payload) {
+        final DeviceAcknowledgement ack;
         try {
-            JsonNode json = objectMapper.readTree(payload);
-
-            String deviceCode = json.path("device").asText("");
-            String status = json.path("status").asText("");
-            String deviceStatus = json.path("device_status").asText("");
-            boolean legacyAck = "ON".equals(status) || "OFF".equals(status);
-            if (deviceCode.isBlank() || (!legacyAck && !List.of("success", "failed", "pending").contains(status))) {
-                log.warn("Bỏ qua phản hồi thiết bị có device/status không hợp lệ");
-                return;
-            }
-            if (!deviceStatus.isEmpty() && !List.of("ON", "OFF").contains(deviceStatus)) {
-                log.warn("Bỏ qua phản hồi có device_status không hợp lệ");
-                return;
-            }
-
-            // Ghép theo lệnh pending gần nhất; correlation ID triển khai ở giai đoạn điều khiển.
-            historyRepository
-                    .findTopByDeviceCodeAndStatusInOrderByCreatedAtDesc(
-                            deviceCode, List.of(CommandStatus.PENDING.getValue()))
-                    .ifPresentOrElse(
-                            history -> {
-                                String received = legacyAck ? status : deviceStatus;
-                                String result = status;
-                                if (legacyAck) {
-                                    result = history.getAction().equals(received)
-                                            ? CommandStatus.SUCCESS.getValue() : CommandStatus.FAILED.getValue();
-                                } else if (CommandStatus.SUCCESS.getValue().equals(status)) {
-                                    // ACK success không gửi trạng thái: thiết bị xác nhận đã thực hiện action.
-                                    if (received.isEmpty()) received = history.getAction();
-                                    if (!history.getAction().equals(received)) result = CommandStatus.FAILED.getValue();
-                                }
-                                history.setStatus(result);
-                                if (!received.isEmpty()) history.setStatusReceived(received);
-                                historyRepository.save(history);
-                                log.info("Kết quả lệnh {}: pending → {}", deviceCode, result);
-                            },
-                            () -> log.warn("Không tìm thấy lệnh pending cho thiết bị: {}", deviceCode)
-                    );
-
-        } catch (Exception e) {
-            log.error("Lỗi parse trạng thái thiết bị: {}", e.getMessage(), e);
+            ack = DeviceAcknowledgement.parse(objectMapper, payload);
+        } catch (RuntimeException exception) {
+            log.warn("Ignoring invalid or uncorrelated device ACK");
+            return;
         }
+        // Service proxy owns the DB transaction; DB failures propagate rather than silently ACKing MQTT.
+        commands.acknowledge(ack);
     }
 }

@@ -2,7 +2,7 @@ package com.iot.backend;
 
 import com.iot.backend.dto.mqtt.SensorMeasurementPayload;
 import com.iot.backend.config.MqttConfig;
-import com.iot.backend.repository.HistoryRepository;
+import com.iot.backend.service.DeviceCommandTransactions;
 import com.iot.backend.service.MqttService;
 import com.iot.backend.service.SensorMeasurementService;
 import org.eclipse.paho.client.mqttv3.*;
@@ -27,7 +27,7 @@ class MqttIngestionTests {
     private final JsonMapper mapper = JsonMapper.builder().build();
     private final MqttConnectOptions options = new MqttConnectOptions();
     private final MqttService mqtt = new MqttService(client, options, mapper, measurements,
-            mock(HistoryRepository.class), executor);
+            mock(DeviceCommandTransactions.class), executor);
 
     @Test
     void connectionConfigurationUsesOneRetryOwnerDurableSessionAndBoundedWaits() throws Exception {
@@ -133,7 +133,7 @@ class MqttIngestionTests {
     @Test
     void controlPayloadUsesJsonEscapingUtf8QosOneAndNoRetain() throws Exception {
         when(client.isConnected()).thenReturn(true);
-        mqtt.publishDeviceControl("đèn\"", "ON");
+        mqtt.publishDeviceControl("đèn\"", "ON", 12);
         var message = ArgumentCaptor.forClass(MqttMessage.class);
         verify(client).publish(eq("iot/control"), message.capture());
         assertThat(message.getValue().getQos()).isEqualTo(1);
@@ -141,11 +141,12 @@ class MqttIngestionTests {
         var json = mapper.readTree(message.getValue().getPayload());
         assertThat(json.get("device").asString()).isEqualTo("đèn\"");
         assertThat(json.get("cmd").asString()).isEqualTo("ON");
+        assertThat(json.get("command_id").asInt()).isEqualTo(12);
     }
 
     @Test
     void offlinePublishFailsClearly() {
-        assertThatThrownBy(() -> mqtt.publishDeviceControl("led", "ON")).isInstanceOf(MqttException.class);
+        assertThatThrownBy(() -> mqtt.publishDeviceControl("led", "ON", 12)).isInstanceOf(MqttException.class);
     }
 
     private Runnable scheduledTask() {

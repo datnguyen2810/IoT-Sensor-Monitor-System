@@ -1,71 +1,65 @@
 package com.iot.backend;
 
-import org.eclipse.paho.client.mqttv3.IMqttClient;
-import com.iot.backend.service.SensorMeasurementService;
-import java.util.concurrent.ScheduledExecutorService;
-import com.iot.backend.entity.History;
-import com.iot.backend.repository.HistoryRepository;
+import com.iot.backend.dto.mqtt.DeviceAcknowledgement;
+import com.iot.backend.service.DeviceCommandTransactions;
 import com.iot.backend.service.MqttService;
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
+import com.iot.backend.service.SensorMeasurementService;
+import org.eclipse.paho.client.mqttv3.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
-
 import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.concurrent.ScheduledExecutorService;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 class MqttCommandStatusTests {
-    private final HistoryRepository histories = mock(HistoryRepository.class);
-    private final MqttService service = new MqttService(mock(IMqttClient.class), new MqttConnectOptions(),
-            JsonMapper.builder().build(), mock(SensorMeasurementService.class), histories,
+    private final DeviceCommandTransactions commands = mock(DeviceCommandTransactions.class);
+    private final MqttService mqtt = new MqttService(mock(IMqttClient.class), new MqttConnectOptions(),
+            JsonMapper.builder().build(), mock(SensorMeasurementService.class), commands,
             mock(ScheduledExecutorService.class));
 
     @ParameterizedTest
-    @CsvSource({"ON,ON,success,ON", "ON,OFF,failed,OFF", "OFF,OFF,success,OFF",
-            "ON,success,success,ON", "ON,failed,failed,NULL", "ON,pending,pending,NULL"})
-    void mapsAcknowledgementsToThreeCommandStates(String action, String ack, String expected, String received) {
-        History history = History.builder().action(action).build();
-        when(histories.findTopByDeviceCodeAndStatusInOrderByCreatedAtDesc("led", List.of("pending")))
-                .thenReturn(Optional.of(history));
-        receive("{\"device\":\"led\",\"status\":\"" + ack + "\"}");
-        assertThat(history.getStatus()).isEqualTo(expected);
-        assertThat(history.getStatusReceived()).isEqualTo("NULL".equals(received) ? null : received);
-        verify(histories).save(history);
+    @ValueSource(strings = {"ON", "OFF", "success", "failed", "pending"})
+    void validatedCorrelatedAckIsPassedToTransactionalHandler(String status) {
+        receive("{\"device\":\"led\",\"command_id\":12,\"status\":\"" + status + "\"}");
+        verify(commands).acknowledge(new DeviceAcknowledgement(12, "led", status, ""));
     }
 
     @Test
-    void successWithWrongDeviceStateIsFailed() {
-        History history = History.builder().action("ON").build();
-        when(histories.findTopByDeviceCodeAndStatusInOrderByCreatedAtDesc("led", List.of("pending")))
-                .thenReturn(Optional.of(history));
-        receive("{\"device\":\"led\",\"status\":\"success\",\"device_status\":\"OFF\"}");
-        assertThat(history.getStatus()).isEqualTo("failed");
-        assertThat(history.getStatusReceived()).isEqualTo("OFF");
+    void explicitPhysicalStateIsPreserved() {
+        receive("{\"device\":\"led\",\"command_id\":12,\"status\":\"failed\",\"device_status\":\"OFF\"}");
+        verify(commands).acknowledge(new DeviceAcknowledgement(12, "led", "failed", "OFF"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "null", "[]", "bad",
+            "{\"device\":\"led\",\"status\":\"ON\"}",
+            "{\"device\":\"led\",\"command_id\":0,\"status\":\"ON\"}",
+            "{\"device\":\"led\",\"command_id\":-1,\"status\":\"ON\"}",
+            "{\"device\":\"led\",\"command_id\":1.2,\"status\":\"ON\"}",
+            "{\"device\":\"led\",\"command_id\":\"12\",\"status\":\"ON\"}",
+            "{\"device\":\"led\",\"command_id\":2147483648,\"status\":\"ON\"}",
+            "{\"device\":\"led\",\"command_id\":12,\"status\":\"invalid\"}",
+            "{\"device\":\"unknown\",\"command_id\":12,\"status\":\"ON\"}",
+            "{\"device\":\"led\",\"command_id\":12,\"status\":\"success\",\"device_status\":null}",
+            "{\"device\":\"led\",\"command_id\":12,\"status\":\"ON\",\"device_status\":\"OFF\"}",
+            "{\"device\":\"led\",\"command_id\":12,\"status\":\"ON\"} {}",
+            "{\"device\":\"led\",\"command_id\":12,\"command_id\":13,\"status\":\"ON\"}"})
+    void malformedOrUncorrelatedAckCannotChangeCommands(String payload) {
+        receive(payload);
+        verifyNoInteractions(commands);
     }
 
     @Test
-    void malformedAndUnknownStatusDoNotChangeHistory() {
-        receive("{\"device\":\"led\",\"status\":\"invalid\"}");
-        receive("{\"device\":\"led\",\"status\":\"success\",\"device_status\":\"invalid\"}");
-        receive("{\"status\":\"success\"}");
-        verifyNoInteractions(histories);
-    }
-
-    @Test
-    void acknowledgementWithoutPendingCommandDoesNotCreateHistory() {
-        when(histories.findTopByDeviceCodeAndStatusInOrderByCreatedAtDesc("led", List.of("pending")))
-                .thenReturn(Optional.empty());
-        receive("{\"device\":\"led\",\"status\":\"success\"}");
-        verify(histories, never()).save(any());
+    void databaseFailurePropagatesToMqttInsteadOfSilentlyDroppingAck() {
+        doThrow(new IllegalStateException("DB unavailable")).when(commands).acknowledge(any());
+        assertThatThrownBy(() -> receive("{\"device\":\"led\",\"command_id\":12,\"status\":\"ON\"}"))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     private void receive(String payload) {
-        service.messageArrived("iot/status", new MqttMessage(payload.getBytes(StandardCharsets.UTF_8)));
+        mqtt.messageArrived("iot/status", new MqttMessage(payload.getBytes(StandardCharsets.UTF_8)));
     }
 }
