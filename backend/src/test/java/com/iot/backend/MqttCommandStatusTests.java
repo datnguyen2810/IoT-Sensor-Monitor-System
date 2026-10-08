@@ -1,8 +1,10 @@
 package com.iot.backend;
 
-import com.iot.backend.config.MqttConfig;
+import org.eclipse.paho.client.mqttv3.IMqttClient;
+import com.iot.backend.service.SensorMeasurementService;
+import java.util.concurrent.ScheduledExecutorService;
 import com.iot.backend.entity.History;
-import com.iot.backend.repository.*;
+import com.iot.backend.repository.HistoryRepository;
 import com.iot.backend.service.MqttService;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
@@ -20,9 +22,9 @@ import static org.mockito.Mockito.*;
 
 class MqttCommandStatusTests {
     private final HistoryRepository histories = mock(HistoryRepository.class);
-    private final MqttService service = new MqttService(mock(MqttConfig.class), new MqttConnectOptions(),
-            JsonMapper.builder().build(), mock(DataSensorRepository.class), mock(SensorRepository.class),
-            mock(DeviceRepository.class), histories);
+    private final MqttService service = new MqttService(mock(IMqttClient.class), new MqttConnectOptions(),
+            JsonMapper.builder().build(), mock(SensorMeasurementService.class), histories,
+            mock(ScheduledExecutorService.class));
 
     @ParameterizedTest
     @CsvSource({"ON,ON,success,ON", "ON,OFF,failed,OFF", "OFF,OFF,success,OFF",

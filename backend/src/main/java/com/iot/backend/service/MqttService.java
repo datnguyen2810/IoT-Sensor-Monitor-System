@@ -1,248 +1,178 @@
 package com.iot.backend.service;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import com.iot.backend.config.MqttConfig;
-import com.iot.backend.entity.DataSensor;
-import com.iot.backend.entity.History;
+import com.iot.backend.dto.mqtt.SensorMeasurementPayload;
 import com.iot.backend.entity.CommandStatus;
-import com.iot.backend.entity.Sensor;
-import com.iot.backend.repository.DataSensorRepository;
-import com.iot.backend.repository.DeviceRepository;
 import com.iot.backend.repository.HistoryRepository;
-import com.iot.backend.repository.SensorRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.eclipse.paho.client.mqttv3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
-import java.time.LocalDateTime;
-import java.util.Arrays;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
-/**
- * Service quản lý kết nối MQTT với Mosquitto Broker.
- * - Subscribe: iot/sensor/data (dữ liệu cảm biến từ ESP8266)
- * - Subscribe: iot/status (phản hồi trạng thái thiết bị từ ESP8266)
- * - Publish: iot/control (gửi lệnh điều khiển xuống ESP8266)
- *
- * Triển khai MqttCallbackExtended để tự động subscribe lại khi reconnect.
- */
 @Service
 @ConditionalOnProperty(name = "mqtt.enabled", havingValue = "true", matchIfMissing = true)
 public class MqttService implements MqttCallbackExtended {
-
     private static final Logger log = LoggerFactory.getLogger(MqttService.class);
-
-    // Topics MQTT theo firmware ESP8266
     private static final String TOPIC_SENSOR_DATA = "iot/sensor/data";
     private static final String TOPIC_DEVICE_STATUS = "iot/status";
     private static final String TOPIC_DEVICE_CONTROL = "iot/control";
-
-    // Sensor IDs khớp với data.sql seed
-    private static final int SENSOR_ID_TEMPERATURE = 1;
-    private static final int SENSOR_ID_HUMIDITY = 2;
-    private static final int SENSOR_ID_LIGHT = 3;
-
-    private final MqttConfig mqttConfig;
+    private final IMqttClient mqttClient;
     private final MqttConnectOptions mqttConnectOptions;
     private final ObjectMapper objectMapper;
-    private final DataSensorRepository dataSensorRepository;
-    private final SensorRepository sensorRepository;
-    private final DeviceRepository deviceRepository;
+    private final SensorMeasurementService measurements;
     private final HistoryRepository historyRepository;
+    private final ScheduledExecutorService connectionExecutor;
+    private volatile boolean stopping;
+    private volatile boolean subscribed;
+    private ScheduledFuture<?> connectionTask;
 
-    private MqttClient mqttClient;
-
-    public MqttService(MqttConfig mqttConfig,
-                       MqttConnectOptions mqttConnectOptions,
-                       ObjectMapper objectMapper,
-                       DataSensorRepository dataSensorRepository,
-                       SensorRepository sensorRepository,
-                       DeviceRepository deviceRepository,
-                       HistoryRepository historyRepository) {
-        this.mqttConfig = mqttConfig;
+    public MqttService(IMqttClient mqttClient, MqttConnectOptions mqttConnectOptions,
+                       ObjectMapper objectMapper, SensorMeasurementService measurements,
+                       HistoryRepository historyRepository, ScheduledExecutorService connectionExecutor) {
+        this.mqttClient = mqttClient;
         this.mqttConnectOptions = mqttConnectOptions;
         this.objectMapper = objectMapper;
-        this.dataSensorRepository = dataSensorRepository;
-        this.sensorRepository = sensorRepository;
-        this.deviceRepository = deviceRepository;
+        this.measurements = measurements;
         this.historyRepository = historyRepository;
+        this.connectionExecutor = connectionExecutor;
     }
 
-    /**
-     * Khởi tạo kết nối MQTT khi ứng dụng Spring Boot khởi động.
-     */
     @PostConstruct
     public void init() {
+        mqttClient.setCallback(this);
+        // No blocking broker connection on Spring's startup thread.
+        connectionTask = connectionExecutor.scheduleWithFixedDelay(this::ensureConnection, 0, 5, TimeUnit.SECONDS);
+    }
+
+    private synchronized void ensureConnection() {
+        if (stopping) return;
         try {
-            mqttClient = new MqttClient(mqttConfig.getBrokerUrl(), mqttConfig.getClientId());
-            mqttClient.setCallback(this);
-            mqttClient.connect(mqttConnectOptions);
-            log.info("Đã kết nối MQTT Broker: {}", mqttConfig.getBrokerUrl());
-        } catch (MqttException e) {
-            log.error("Không thể kết nối MQTT Broker: {}", e.getMessage(), e);
+            if (!mqttClient.isConnected()) {
+                subscribed = false;
+                mqttClient.connect(mqttConnectOptions);
+                log.info("MQTT connected");
+            }
+            if (!subscribed) {
+                mqttClient.subscribe(new String[]{TOPIC_SENSOR_DATA, TOPIC_DEVICE_STATUS}, new int[]{1, 1});
+                subscribed = true;
+                log.info("MQTT subscribed to sensor data and device status");
+            }
+        } catch (MqttException | RuntimeException exception) {
+            // Catch in the scheduled task so one failure cannot cancel all future attempts.
+            subscribed = false;
+            log.warn("MQTT connection/subscription failed; retry in 5 seconds ({}: {})",
+                    exception.getClass().getSimpleName(), exception.getMessage());
         }
     }
 
-    /**
-     * Ngắt kết nối MQTT khi ứng dụng tắt.
-     */
     @PreDestroy
     public void destroy() {
-        try {
-            if (mqttClient != null && mqttClient.isConnected()) {
-                mqttClient.disconnect();
-                mqttClient.close();
-                log.info("Đã ngắt kết nối MQTT Broker");
+        stopping = true;
+        if (connectionTask != null) connectionTask.cancel(true);
+        connectionExecutor.shutdownNow();
+        // Serialized against an in-flight connect attempt, including shutdown while broker is offline.
+        synchronized (this) {
+            try {
+                if (mqttClient.isConnected()) mqttClient.disconnect();
+            } catch (MqttException exception) {
+                log.warn("MQTT disconnect failed: {}", exception.getMessage());
+                try {
+                    mqttClient.disconnectForcibly(1000, 1000);
+                } catch (MqttException forcedException) {
+                    log.warn("MQTT forced disconnect failed: {}", forcedException.getMessage());
+                }
+            } finally {
+                try {
+                    mqttClient.close();
+                } catch (MqttException exception) {
+                    log.warn("MQTT close failed: {}", exception.getMessage());
+                }
             }
-        } catch (MqttException e) {
-            log.error("Lỗi khi ngắt kết nối MQTT: {}", e.getMessage(), e);
         }
     }
 
-    // ==================== MqttCallbackExtended ====================
-
-    /**
-     * Được gọi khi kết nối (hoặc kết nối lại) thành công.
-     * Subscribe lại các topic cần thiết.
-     */
     @Override
     public void connectComplete(boolean reconnect, String serverURI) {
-        String action = reconnect ? "Kết nối lại" : "Kết nối lần đầu";
-        log.info("MQTT {}: {}", action, serverURI);
-        subscribeTopics();
+        // Subscribe on the connection worker, not in Paho's callback (avoids callback deadlocks).
+        subscribed = false;
     }
 
     @Override
     public void connectionLost(Throwable cause) {
-        log.warn("Mất kết nối MQTT: {}. Đang thử kết nối lại...", cause.getMessage());
+        subscribed = false;
+        log.warn("MQTT connection lost; retry scheduled: {}", cause == null ? "unknown" : cause.getMessage());
     }
 
     @Override
     public void messageArrived(String topic, MqttMessage message) {
-        String payload = new String(message.getPayload());
-        log.debug("MQTT nhận [{}]: {}", topic, payload);
-
+        final String payload;
         try {
-            switch (topic) {
-                case TOPIC_SENSOR_DATA -> handleSensorData(payload);
-                case TOPIC_DEVICE_STATUS -> handleDeviceStatus(payload);
-                default -> log.warn("Topic không xử lý: {}", topic);
-            }
-        } catch (Exception e) {
-            log.error("Lỗi xử lý message MQTT [{}]: {}", topic, e.getMessage(), e);
+            payload = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(message.getPayload())).toString();
+        } catch (CharacterCodingException exception) {
+            log.warn("Ignoring MQTT message with invalid UTF-8 on {}", topic);
+            return;
+        }
+        switch (topic) {
+            case TOPIC_SENSOR_DATA -> handleSensorData(payload);
+            case TOPIC_DEVICE_STATUS -> handleDeviceStatus(payload);
+            default -> log.debug("Ignoring MQTT topic {}", topic);
         }
     }
 
     @Override
-    public void deliveryComplete(IMqttDeliveryToken token) {
-        // Không cần xử lý, chỉ log khi cần debug
-    }
+    public void deliveryComplete(IMqttDeliveryToken token) { }
 
-    // ==================== Subscribe & Publish ====================
-
-    /**
-     * Subscribe vào các topic cần thiết.
-     */
-    private void subscribeTopics() {
-        try {
-            mqttClient.subscribe(TOPIC_SENSOR_DATA, 1);
-            mqttClient.subscribe(TOPIC_DEVICE_STATUS, 1);
-            log.info("Đã subscribe: {}, {}", TOPIC_SENSOR_DATA, TOPIC_DEVICE_STATUS);
-        } catch (MqttException e) {
-            log.error("Lỗi subscribe MQTT topics: {}", e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Publish message xuống topic MQTT.
-     * Được gọi bởi DeviceService khi frontend gửi lệnh điều khiển.
-     *
-     * @param topic   Topic MQTT (ví dụ: iot/control)
-     * @param payload Nội dung JSON (ví dụ: {"device": "led", "cmd": "ON"})
-     */
     public void publish(String topic, String payload) throws MqttException {
-        if (mqttClient == null || !mqttClient.isConnected()) {
+        if (stopping || !mqttClient.isConnected()) {
             throw new MqttException(MqttException.REASON_CODE_CLIENT_NOT_CONNECTED);
         }
-        MqttMessage message = new MqttMessage(payload.getBytes());
+        MqttMessage message = new MqttMessage(payload.getBytes(StandardCharsets.UTF_8));
         message.setQos(1);
+        message.setRetained(false);
         mqttClient.publish(topic, message);
-        log.info("MQTT publish [{}]: {}", topic, payload);
+        log.debug("MQTT published on {}", topic);
     }
 
-    /**
-     * Publish lệnh điều khiển thiết bị xuống ESP8266.
-     * Chuyển đổi field HTTP "action" thành field MQTT "cmd" theo plan.
-     *
-     * @param deviceCode Mã thiết bị (led/fan/ac)
-     * @param action     Hành động (ON/OFF)
-     */
     public void publishDeviceControl(String deviceCode, String action) throws MqttException {
-        String payload = String.format("{\"device\": \"%s\", \"cmd\": \"%s\"}", deviceCode, action);
-        publish(TOPIC_DEVICE_CONTROL, payload);
+        publish(TOPIC_DEVICE_CONTROL, objectMapper.writeValueAsString(Map.of("device", deviceCode, "cmd", action)));
     }
 
-    // ==================== Xử lý dữ liệu ====================
-
-    /**
-     * Xử lý dữ liệu cảm biến từ ESP8266.
-     * Payload: {"temperature": 28.5, "humidity": 65.0, "light": 650}
-     * Lưu 3 bản ghi vào bảng datasensors với cùng 1 timestamp.
-     */
     private void handleSensorData(String payload) {
+        final SensorMeasurementPayload measurement;
         try {
-            JsonNode json = objectMapper.readTree(payload);
-
-            LocalDateTime timestamp = LocalDateTime.now();
-
-            // Lấy giá trị từ JSON
-            float temperature = (float) json.get("temperature").asDouble();
-            float humidity = (float) json.get("humidity").asDouble();
-            float light = (float) json.get("light").asDouble();
-
-            // Lấy Sensor reference từ DB (có cache trong Hibernate L1)
-            Sensor tempSensor = sensorRepository.getReferenceById(SENSOR_ID_TEMPERATURE);
-            Sensor humiSensor = sensorRepository.getReferenceById(SENSOR_ID_HUMIDITY);
-            Sensor lightSensor = sensorRepository.getReferenceById(SENSOR_ID_LIGHT);
-
-            // Tạo 3 bản ghi DataSensor cùng timestamp
-            List<DataSensor> records = Arrays.asList(
-                    DataSensor.builder()
-                            .sensor(tempSensor)
-                            .value(temperature)
-                            .createdAt(timestamp)
-                            .build(),
-                    DataSensor.builder()
-                            .sensor(humiSensor)
-                            .value(humidity)
-                            .createdAt(timestamp)
-                            .build(),
-                    DataSensor.builder()
-                            .sensor(lightSensor)
-                            .value(light)
-                            .createdAt(timestamp)
-                            .build()
-            );
-
-            dataSensorRepository.saveAll(records);
-            log.info("Lưu dữ liệu cảm biến: temp={}, humi={}, light={}", temperature, humidity, light);
-
-        } catch (Exception e) {
-            log.error("Lỗi parse dữ liệu cảm biến: {}", e.getMessage(), e);
+            measurement = SensorMeasurementPayload.parse(objectMapper, payload);
+        } catch (RuntimeException exception) {
+            log.warn("Ignoring malformed sensor payload: {}", exception.getClass().getSimpleName());
+            return;
+        }
+        try {
+            boolean saved = measurements.persist(measurement);
+            log.debug(saved ? "Stored sensor measurement" : "Ignored duplicate sensor measurement");
+        } catch (IllegalArgumentException exception) {
+            log.warn("Ignoring conflicting measurement_id");
+        } catch (RuntimeException exception) {
+            // Do not silently acknowledge a database failure as a successful ingestion.
+            log.error("Sensor measurement transaction failed", exception);
+            throw exception;
         }
     }
 
-    /**
-     * Xử lý phản hồi trạng thái thiết bị từ ESP8266.
-     * Payload mới: {"device":"led","status":"success","device_status":"ON"}.
-     * Vẫn nhận payload firmware cũ {"device":"led","status":"ON"}.
-     * Chỉ cập nhật lệnh pending; kết quả lệnh tách khỏi trạng thái thiết bị.
-     */
+    // Existing ACK behavior remains unchanged; command correlation belongs to phase 5.
     private void handleDeviceStatus(String payload) {
         try {
             JsonNode json = objectMapper.readTree(payload);

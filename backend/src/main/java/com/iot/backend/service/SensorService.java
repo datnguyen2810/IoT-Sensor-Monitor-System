@@ -51,13 +51,22 @@ public class SensorService {
     }
 
     private List<SensorChartResponse> snapshots(int limit) {
-        List<LocalDateTime> times = repository.findCompleteMeasurementTimes(PageRequest.of(0, limit));
-        if (times.isEmpty()) return List.of();
-        Map<LocalDateTime, SensorChartResponse> points = new TreeMap<>();
+        var keys = repository.findCompleteMeasurements(PageRequest.of(0, limit));
+        if (keys.isEmpty()) return List.of();
+        record Key(String measurementId, LocalDateTime time) { }
+        Map<Key, SensorChartResponse> points = new LinkedHashMap<>();
+        // Query returns newest first; chart output must be oldest first, with stable ordering on ties.
+        for (var key : keys.reversed()) {
+            LocalDateTime time = key.getCreatedAt();
+            points.put(new Key(key.getMeasurementId(), key.getMeasurementId() == null ? time : null), SensorChartResponse.builder()
+                    .time(time.format(SEARCH_TIME)).timestamp(formatTimestamp(time)).build());
+        }
+        var times = keys.stream().map(DataSensorRepository.MeasurementKey::getCreatedAt).distinct().toList();
         for (DataSensor record : repository.findByCreatedAtInOrderByCreatedAtAsc(times)) {
-            SensorChartResponse point = points.computeIfAbsent(record.getCreatedAt(), time ->
-                    SensorChartResponse.builder().time(time.format(SEARCH_TIME))
-                            .timestamp(formatTimestamp(time)).build());
+            String measurementId = record.getMeasurement() == null ? null : record.getMeasurement().getId();
+            var key = new Key(measurementId, measurementId == null ? record.getCreatedAt() : null);
+            SensorChartResponse point = points.get(key);
+            if (point == null) continue;
             switch (record.getSensor().getId()) {
                 case 1 -> point.setTemperature(record.getValue());
                 case 2 -> point.setHumidity(record.getValue());

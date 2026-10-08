@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 @Table(name = "datasensors", indexes = {
         @Index(name = "idx_datasensors_created_id", columnList = "created_at,id"),
         @Index(name = "idx_datasensors_sensor_created", columnList = "sensor_id,created_at")
-})
+}, uniqueConstraints = @UniqueConstraint(name = "uk_datasensors_measurement_sensor", columnNames = {"measurement_id", "sensor_id"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -24,6 +24,11 @@ public class DataSensor {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sensor_id", nullable = false)
     private Sensor sensor;
+
+    // Nullable to keep existing timestamp-only measurements readable.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "measurement_id", foreignKey = @ForeignKey(name = "fk_datasensors_measurement"))
+    private SensorMeasurement measurement;
 
     @Column(name = "value", nullable = false)
     private Float value;
