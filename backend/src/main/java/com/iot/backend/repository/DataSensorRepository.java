@@ -17,22 +17,6 @@ import java.util.Optional;
 @Repository
 public interface DataSensorRepository extends JpaRepository<DataSensor, Integer>, JpaSpecificationExecutor<DataSensor> {
 
-    interface MeasurementKey {
-        String getMeasurementId();
-        LocalDateTime getCreatedAt();
-        Integer getLastId();
-    }
-
-    @Query("""
-            SELECT m.id AS measurementId, d.createdAt AS createdAt, MAX(d.id) AS lastId
-            FROM DataSensor d LEFT JOIN d.measurement m
-            WHERE d.sensor.id IN (1, 2, 3)
-            GROUP BY m.id, d.createdAt
-            HAVING COUNT(d) = 3 AND COUNT(DISTINCT d.sensor.id) = 3
-            ORDER BY d.createdAt DESC, MAX(d.id) DESC
-            """)
-    List<MeasurementKey> findCompleteMeasurements(Pageable pageable);
-
     /**
      * Lấy giá trị đo mới nhất của một loại cảm biến cụ thể (nhiệt độ / độ ẩm / ánh sáng)
      */

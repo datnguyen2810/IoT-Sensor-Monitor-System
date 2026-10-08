@@ -32,10 +32,10 @@ class MqttBrokerTests {
         var lost = new CountDownLatch(1);
         var received = new LinkedBlockingQueue<SensorMeasurementPayload>();
         var persistence = mock(SensorMeasurementService.class);
-        when(persistence.persist(any())).thenAnswer(invocation -> {
+        doAnswer(invocation -> {
             received.add(invocation.getArgument(0));
-            return true;
-        });
+            return null;
+        }).when(persistence).persist(any());
         var options = new MqttConnectOptions();
         options.setConnectionTimeout(1);
         options.setKeepAliveInterval(2);
@@ -67,8 +67,8 @@ class MqttBrokerTests {
             broker = startBroker(port);
             assertThat(subscriptions.get().await(12, TimeUnit.SECONDS)).isTrue();
             publish(uri, "{\"temperature\":\"bad\",\"humidity\":50,\"light\":2}",
-                    "{\"measurement_id\":\"mẫu-1\",\"temperature\":25,\"humidity\":50,\"light\":2}");
-            assertThat(received.poll(5, TimeUnit.SECONDS)).isEqualTo(new SensorMeasurementPayload("mẫu-1", 25, 50, 2));
+                    "{\"temperature\":25,\"humidity\":50,\"light\":2}");
+            assertThat(received.poll(5, TimeUnit.SECONDS)).isEqualTo(new SensorMeasurementPayload(25, 50, 2));
             assertThat(received).isEmpty();
 
             stopBroker(broker);
@@ -76,8 +76,8 @@ class MqttBrokerTests {
             subscriptions.set(new CountDownLatch(1));
             broker = startBroker(port);
             assertThat(subscriptions.get().await(12, TimeUnit.SECONDS)).isTrue();
-            publish(uri, "{\"measurement_id\":\"second\",\"temperature\":26,\"humidity\":51,\"light\":3}");
-            assertThat(received.poll(5, TimeUnit.SECONDS)).isEqualTo(new SensorMeasurementPayload("second", 26, 51, 3));
+            publish(uri, "{\"temperature\":26,\"humidity\":51,\"light\":3}");
+            assertThat(received.poll(5, TimeUnit.SECONDS)).isEqualTo(new SensorMeasurementPayload(26, 51, 3));
         } finally {
             mqtt.destroy();
             stopBroker(broker);

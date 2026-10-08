@@ -11,9 +11,6 @@ import java.io.IOException;
 import java.sql.DriverManager;
 import java.util.Properties;
 import java.util.UUID;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import org.springframework.jdbc.core.ConnectionCallback;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -55,39 +52,13 @@ class SensorMySqlTests extends SensorApiTests {
     void expectedIndexesArePresentOnMySql() {
         assertThat(jdbc.queryForList("SELECT DISTINCT INDEX_NAME FROM information_schema.statistics "
                 + "WHERE table_schema = DATABASE() AND table_name = 'datasensors'", String.class))
-                .contains("idx_datasensors_created_id", "idx_datasensors_sensor_created", "uk_datasensors_measurement_sensor");
-    }
-
-    @Test
-    void additiveMigrationPreservesLegacyDataAndCanRunTwice() throws Exception {
-        // Only touches new, explicitly named tables inside this test's random temporary schema.
-        jdbc.execute("CREATE TABLE datasensors_migration (id INT PRIMARY KEY, sensor_id INT NOT NULL, "
-                + "value FLOAT NOT NULL, created_at DATETIME(6) NOT NULL)");
-        try {
-            jdbc.update("INSERT INTO datasensors_migration VALUES (1,1,25,NOW()),(2,2,50,NOW()),(3,3,10,NOW())");
-            String script = Files.readString(Path.of(System.getProperty("basedir", "."), "db", "migrations", "004_sensor_measurements.sql"))
-                    .replaceAll("(?m)^--.*$", "")
-                    .replace("sensor_measurements", "sensor_measurements_migration")
-                    .replace("datasensors", "datasensors_migration");
-            jdbc.execute((ConnectionCallback<Void>) connection -> {
-                try (var statement = connection.createStatement()) {
-                    for (int run = 0; run < 2; run++) {
-                        for (String sql : script.split(";")) {
-                            if (!sql.isBlank()) statement.execute(sql.trim());
-                        }
-                    }
-                }
-                return null;
-            });
-            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM datasensors_migration WHERE measurement_id IS NULL", Integer.class))
-                    .isEqualTo(3);
-            assertThat(jdbc.queryForList("SELECT CONSTRAINT_TYPE FROM information_schema.table_constraints "
-                    + "WHERE table_schema = DATABASE() AND table_name = 'datasensors_migration'", String.class))
-                    .contains("UNIQUE", "FOREIGN KEY");
-        } finally {
-            jdbc.execute("DROP TABLE datasensors_migration");
-            jdbc.execute("DROP TABLE IF EXISTS sensor_measurements_migration");
-        }
+                .contains("idx_datasensors_created_id", "idx_datasensors_sensor_created");
+        assertThat(jdbc.queryForList("SELECT table_name FROM information_schema.tables "
+                + "WHERE table_schema = DATABASE()", String.class))
+                .containsExactlyInAnyOrder("sensors", "datasensors", "devices", "history", "user");
+        assertThat(jdbc.queryForList("SELECT column_name FROM information_schema.columns "
+                + "WHERE table_schema = DATABASE() AND table_name = 'datasensors'", String.class))
+                .containsExactlyInAnyOrder("id", "sensor_id", "value", "created_at");
     }
 
     @AfterAll

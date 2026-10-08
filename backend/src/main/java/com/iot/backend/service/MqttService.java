@@ -161,10 +161,8 @@ public class MqttService implements MqttCallbackExtended {
             return;
         }
         try {
-            boolean saved = measurements.persist(measurement);
-            log.debug(saved ? "Stored sensor measurement" : "Ignored duplicate sensor measurement");
-        } catch (IllegalArgumentException exception) {
-            log.warn("Ignoring conflicting measurement_id");
+            measurements.persist(measurement);
+            log.debug("Stored sensor measurement");
         } catch (RuntimeException exception) {
             // Do not silently acknowledge a database failure as a successful ingestion.
             log.error("Sensor measurement transaction failed", exception);

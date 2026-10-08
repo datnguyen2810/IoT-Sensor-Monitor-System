@@ -54,8 +54,6 @@ class MqttIngestionTests {
             "{\"temperature\":1,\"humidity\":-1,\"light\":3}",
             "{\"temperature\":1,\"humidity\":100.000001,\"light\":3}",
             "{\"temperature\":1,\"humidity\":2,\"light\":-1}",
-            "{\"temperature\":1,\"humidity\":2,\"light\":3,\"measurement_id\":null}",
-            "{\"temperature\":1,\"humidity\":2,\"light\":3,\"measurement_id\":\" \"}",
             "{\"temperature\":1,\"humidity\":2,\"light\":3} {}",
             "{\"temperature\":1,\"temperature\":2,\"humidity\":2,\"light\":3}"})
     void malformedPayloadNeverReachesPersistence(String payload) {
@@ -64,23 +62,22 @@ class MqttIngestionTests {
     }
 
     @Test
-    void acceptsValidatedUtf8IdAndBoundaryValues() {
-        receive("{\"temperature\":-10,\"humidity\":100,\"light\":0,\"measurement_id\":\"mẫu-1\"}");
-        verify(measurements).persist(new SensorMeasurementPayload("mẫu-1", -10, 100, 0));
+    void acceptsBoundaryValuesAndIgnoresUnrelatedUtf8Fields() {
+        receive("{\"temperature\":-10,\"humidity\":100,\"light\":0,\"note\":\"mẫu đo\"}");
+        verify(measurements).persist(new SensorMeasurementPayload(-10, 100, 0));
         receive("{\"temperature\":25,\"humidity\":0,\"light\":1}");
-        verify(measurements).persist(new SensorMeasurementPayload(null, 25, 0, 1));
+        verify(measurements).persist(new SensorMeasurementPayload(25, 0, 1));
     }
 
     @Test
-    void rejectsInvalidUtf8AndOversizedId() {
+    void rejectsInvalidUtf8() {
         mqtt.messageArrived("iot/sensor/data", new MqttMessage(new byte[]{(byte) 0xc3, 0x28}));
-        receive("{\"temperature\":1,\"humidity\":2,\"light\":3,\"measurement_id\":\"" + "a".repeat(101) + "\"}");
         verifyNoInteractions(measurements);
     }
 
     @Test
     void databaseFailureIsNotAcknowledgedAsSuccessfulIngestion() {
-        when(measurements.persist(any())).thenThrow(new IllegalStateException("database unavailable"));
+        doThrow(new IllegalStateException("database unavailable")).when(measurements).persist(any());
         assertThatThrownBy(() -> receive("{\"temperature\":1,\"humidity\":2,\"light\":3}"))
                 .isInstanceOf(IllegalStateException.class);
     }

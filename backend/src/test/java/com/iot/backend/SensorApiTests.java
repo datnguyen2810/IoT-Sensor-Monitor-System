@@ -2,7 +2,6 @@ package com.iot.backend;
 
 import com.iot.backend.entity.DataSensor;
 import com.iot.backend.dto.mqtt.SensorMeasurementPayload;
-import com.iot.backend.repository.SensorMeasurementRepository;
 import com.iot.backend.service.SensorMeasurementService;
 import com.iot.backend.service.MqttService;
 import com.iot.backend.repository.HistoryRepository;
@@ -56,7 +55,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public class SensorApiTests {
     @Autowired SensorService service;
     @MockitoSpyBean DataSensorRepository records;
-    @Autowired SensorMeasurementRepository measurements;
     @Autowired SensorMeasurementService ingestion;
     @Autowired ObjectMapper mapper;
     @Autowired PlatformTransactionManager transactionManager;
@@ -71,8 +69,6 @@ public class SensorApiTests {
     void prepare() {
         records.deleteAll();
         records.flush();
-        measurements.deleteAll();
-        measurements.flush();
         if (environment.getProperty("spring.datasource.url", "").startsWith("jdbc:h2:")) {
             // Chỉ mô phỏng function trong H2; cùng test còn được chạy trên MySQL thật.
             jdbc.execute("CREATE ALIAS IF NOT EXISTS date_format FOR 'com.iot.backend.SensorApiTests.mysqlDateFormat'");
@@ -88,68 +84,56 @@ public class SensorApiTests {
     void mqttPayloadCreatesExactlyThreeRowsReadableByLatestAndChart() {
         var mqtt = new MqttService(mock(IMqttClient.class), new MqttConnectOptions(), mapper, ingestion,
                 mock(HistoryRepository.class), mock(ScheduledExecutorService.class));
-        var message = new MqttMessage("{\"measurement_id\":\"first\",\"temperature\":28.5,\"humidity\":65,\"light\":0}"
+        var message = new MqttMessage("{\"temperature\":28.5,\"humidity\":65,\"light\":0}"
                 .getBytes(StandardCharsets.UTF_8));
         mqtt.messageArrived("iot/sensor/data", message);
-        mqtt.messageArrived("iot/sensor/data", message);
         assertThat(records.count()).isEqualTo(3);
-        assertThat(measurements.count()).isEqualTo(1);
-        assertThat(records.findAll()).extracting(row -> row.getMeasurement().getId()).containsOnly("firmware:first");
+        assertThat(records.findAll()).extracting(DataSensor::getCreatedAt).containsOnly(records.findAll().getFirst().getCreatedAt());
         assertThat(service.getLatestData().getTemperature()).isEqualTo(28.5f);
         assertThat(service.getLatestData().getLight()).isZero();
         assertThat(service.getChartData()).hasSize(1);
+        // No persistent sample ID in the original ERD: a repeated delivery remains a new batch.
+        mqtt.messageArrived("iot/sensor/data", message);
+        assertThat(records.count()).isEqualTo(6);
     }
 
     @Test
-    void distinctMeasurementsAtSameTimestampDoNotMergeAndLegacyMessagesRemainSupported() {
-        ingestion.persist(new SensorMeasurementPayload("one", 1, 2, 3));
-        ingestion.persist(new SensorMeasurementPayload("two", 4, 5, 6));
+    void twoBatchesWithSameTimestampAreSkippedRatherThanMixed() {
+        ingestion.persist(new SensorMeasurementPayload(1, 2, 3));
+        ingestion.persist(new SensorMeasurementPayload(4, 5, 6));
         jdbc.update("UPDATE datasensors SET created_at = ?", Timestamp.valueOf(START));
-        assertThat(service.getChartData()).hasSize(2);
-        assertThat(service.getChartData()).extracting(point -> point.getTemperature()).containsExactly(1f, 4f);
-        assertThat(service.getLatestData().getTemperature()).isEqualTo(4f);
-        ingestion.persist(new SensorMeasurementPayload(null, 7, 8, 9));
-        ingestion.persist(new SensorMeasurementPayload(null, 7, 8, 9));
-        assertThat(records.count()).isEqualTo(12);
-        assertThat(measurements.count()).isEqualTo(4);
-    }
-
-    @Test
-    void reusedMeasurementIdWithDifferentDataIsRejected() {
-        ingestion.persist(new SensorMeasurementPayload("one", 1, 2, 3));
-        assertThatThrownBy(() -> ingestion.persist(new SensorMeasurementPayload("one", 4, 5, 6)))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThat(records.count()).isEqualTo(3);
+        assertThat(service.getChartData()).isEmpty();
+        assertThat(service.getLatestData()).isNull();
+        assertThat(records.count()).isEqualTo(6);
     }
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    void thirdInsertFailureRollsBackRowsAndDeduplicationMetadataThenAllowsRetry() {
-        // Deliberately violate the unique measurement/sensor constraint on the third row.
-        // This uses the real repository and database, not a mocked transaction.
+    void thirdInsertFailureRollsBackBothPreviousRowsThenAllowsRetry() {
+        // Write two real rows, then violate value NOT NULL on the third row in the same transaction.
         doAnswer(invocation -> {
             List<DataSensor> batch = invocation.getArgument(0);
-            batch.get(2).setSensor(batch.get(0).getSensor());
-            var result = records.saveAll(batch);
+            records.saveAll(batch.subList(0, 2));
             records.flush();
-            return result;
+            assertThat(records.count()).isEqualTo(2);
+            batch.get(2).setValue(null);
+            records.saveAndFlush(batch.get(2));
+            return batch;
         }).when(records).saveAllAndFlush(any());
         try {
-            assertThatThrownBy(() -> ingestion.persist(new SensorMeasurementPayload("retry", 1, 2, 3)))
+            assertThatThrownBy(() -> ingestion.persist(new SensorMeasurementPayload(1, 2, 3)))
                     .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
         } finally {
             reset(records);
         }
         assertThat(records.count()).isZero();
-        assertThat(measurements.count()).isZero();
         try {
-            assertThat(ingestion.persist(new SensorMeasurementPayload("retry", 1, 2, 3))).isTrue();
+            ingestion.persist(new SensorMeasurementPayload(1, 2, 3));
             assertThat(records.count()).isEqualTo(3);
         } finally {
             new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
                 records.deleteAll();
                 records.flush();
-                measurements.deleteAll();
             });
         }
     }

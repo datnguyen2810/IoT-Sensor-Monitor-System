@@ -5,15 +5,12 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.core.StreamReadFeature;
 
-/** Validated firmware payload. An optional stable ID enables QoS 1 deduplication. */
-public record SensorMeasurementPayload(String measurementId, float temperature, float humidity, float light) {
+/** Validated firmware payload; persistence follows the original timestamp-only ERD. */
+public record SensorMeasurementPayload(float temperature, float humidity, float light) {
     public SensorMeasurementPayload {
         if (!Float.isFinite(temperature) || !Float.isFinite(humidity) || !Float.isFinite(light)
                 || humidity < 0 || humidity > 100 || light < 0) {
             throw new IllegalArgumentException("Invalid sensor values");
-        }
-        if (measurementId != null && (measurementId.isBlank() || measurementId.length() > 100)) {
-            throw new IllegalArgumentException("measurement_id must contain 1 to 100 characters");
         }
     }
 
@@ -21,9 +18,7 @@ public record SensorMeasurementPayload(String measurementId, float temperature, 
         JsonNode root = mapper.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                 .with(StreamReadFeature.STRICT_DUPLICATE_DETECTION).readTree(payload);
         if (root == null || !root.isObject()) throw new IllegalArgumentException("Expected a JSON object");
-        JsonNode id = root.get("measurement_id");
-        if (id != null && !id.isString()) throw new IllegalArgumentException("measurement_id must be a string");
-        return new SensorMeasurementPayload(id == null ? null : id.asString(),
+        return new SensorMeasurementPayload(
                 number(root, "temperature"), number(root, "humidity"), number(root, "light"));
     }
 
