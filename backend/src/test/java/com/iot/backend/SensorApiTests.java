@@ -221,6 +221,56 @@ public class SensorApiTests {
         assertThat(beyond.getData()).isEmpty();
     }
 
+    @Test
+    void filteredPaginationCountMatchesDataQueryForEachSearchMode() {
+        sample(START, 30.5f, 50, 650);
+        sample(START.plusMinutes(1), 30.5f, 60, 750);
+        sample(START.plusDays(1), 40, 70, 850);
+        for (String mode : List.of("", "value")) {
+            var page = service.getHistory(2, 1, "Nhiệt Độ", "30.5", mode, "asc");
+            assertThat(page.getTotalRecords()).isEqualTo(2);
+            assertThat(page.getTotalPages()).isEqualTo(2);
+            assertThat(page.getData()).hasSize(1);
+            assertThat(page.getData().getFirst().getValue()).isEqualTo(30.5f);
+        }
+        for (String mode : List.of("", "time")) {
+            var page = service.getHistory(2, 1, "Nhiệt Độ", "2026-10-07", mode, "asc");
+            assertThat(page.getTotalRecords()).isEqualTo(2);
+            assertThat(page.getTotalPages()).isEqualTo(2);
+            assertThat(page.getData()).hasSize(1);
+            assertThat(page.getData().getFirst().getCreatedAt()).isEqualTo("2026-10-07T10:01:00+07:00");
+        }
+        assertThat(service.getHistory(1, 10, "", "nhiệt", "value", "asc").getTotalRecords()).isZero();
+        assertThat(service.getHistory(1, 10, "", "nhiệt", "time", "asc").getTotalRecords()).isZero();
+    }
+
+    @Test
+    void fullDateSearchExcludesNextMidnightAndInvalidDateDoesNotMatch() {
+        sample(START.toLocalDate().atStartOfDay(), 1, 2, 3);
+        sample(START.toLocalDate().atTime(23, 59, 59), 4, 5, 6);
+        sample(START.toLocalDate().plusDays(1).atStartOfDay(), 7, 8, 9);
+        assertThat(service.getHistory(1, 10, "", "2026-10-07", "time", "asc").getTotalRecords()).isEqualTo(6);
+        assertThat(service.getHistory(1, 10, "", "2026-02-30", "time", "asc").getTotalRecords()).isZero();
+        assertThat(service.getHistory(1, 10, "", "  ", "time", "asc").getTotalRecords()).isEqualTo(9);
+    }
+
+    @Test
+    void queryTreatsWildcardsEscapeCharacterAndQuotesAsLiteralInput() {
+        var sensor = sensors.findById(1).orElseThrow();
+        sensor.setName("Literal_%!'");
+        sensors.saveAndFlush(sensor);
+        sample(START, 30, 60, 650);
+        sample(START.plusMinutes(1), 31, 61, 651);
+        for (String keyword : List.of("_", "%", "!", "'")) {
+            var page = service.getHistory(1, 1, "", keyword, "", "asc");
+            assertThat(page.getTotalRecords()).isEqualTo(2);
+            assertThat(page.getTotalPages()).isEqualTo(2);
+            assertThat(page.getData()).hasSize(1);
+            assertThat(page.getData().getFirst().getSensorName()).isEqualTo("Literal_%!'");
+        }
+        assertThat(service.getHistory(1, 10, "", "' OR 1=1 --", "", "asc").getTotalRecords()).isZero();
+    }
+
     @ParameterizedTest
     @CsvSource({"page,0", "page,-1", "limit,0", "limit,101", "sort,wrong",
             "sensor_type,Nhiệt", "search_type,wrong", "page,abc"})

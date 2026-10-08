@@ -3,14 +3,9 @@ package com.iot.backend.service;
 import com.iot.backend.dto.response.*;
 import com.iot.backend.entity.DataSensor;
 import com.iot.backend.repository.DataSensorRepository;
-import jakarta.persistence.criteria.Expression;
-import jakarta.persistence.criteria.JoinType;
-import jakarta.persistence.criteria.Predicate;
-import org.hibernate.query.criteria.JpaExpression;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -85,37 +80,11 @@ public class SensorService {
         }
         var pageable = PageRequest.of(page - 1, limit,
                 Sort.by("asc".equals(sort) ? Sort.Direction.ASC : Sort.Direction.DESC, "createdAt", "id"));
-        Specification<DataSensor> specification = (root, query, cb) -> {
-            if (query != null && query.getResultType() != Long.class && query.getResultType() != long.class) {
-                root.fetch("sensor", JoinType.LEFT);
-            }
-            List<Predicate> predicates = new ArrayList<>();
-            if (!type.isEmpty()) predicates.add(cb.equal(root.get("sensor").get("id"), SENSOR_TYPES.get(type)));
-            if (!keyword.isEmpty()) {
-                String pattern = "%" + escapeLike(keyword.toLowerCase(Locale.ROOT)) + "%";
-                Expression<String> value = ((JpaExpression<Float>) root.<Float>get("value")).cast(String.class);
-                Predicate valueMatch = cb.like(value, pattern, '!');
-                if ("value".equals(mode)) {
-                    predicates.add(valueMatch);
-                } else {
-                    Predicate timeMatch;
-                    LocalDate date = fullDate(keyword);
-                    if (date != null) {
-                        timeMatch = cb.and(cb.greaterThanOrEqualTo(root.get("createdAt"), date.atStartOfDay()),
-                                cb.lessThan(root.get("createdAt"), date.plusDays(1).atStartOfDay()));
-                    } else {
-                        Expression<String> time = cb.function("DATE_FORMAT", String.class,
-                                root.get("createdAt"), cb.literal("%Y-%m-%d %H:%i:%s"));
-                        timeMatch = cb.like(time, pattern, '!');
-                    }
-                    if ("time".equals(mode)) predicates.add(timeMatch);
-                    else predicates.add(cb.or(timeMatch, valueMatch,
-                            cb.like(cb.lower(root.get("sensor").get("name")), pattern, '!')));
-                }
-            }
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
-        Page<DataSensor> result = repository.findAll(specification, pageable);
+        String pattern = keyword.isEmpty() ? null : "%" + escapeLike(keyword.toLowerCase(Locale.ROOT)) + "%";
+        LocalDate date = fullDate(keyword);
+        Page<DataSensor> result = repository.searchHistory(SENSOR_TYPES.get(type), pattern, mode,
+                date == null ? null : date.atStartOfDay(),
+                date == null ? null : date.plusDays(1).atStartOfDay(), pageable);
         List<SensorHistoryResponse> rows = result.getContent().stream().map(record ->
                 SensorHistoryResponse.builder().id(record.getId())
                         .sensorName(record.getSensor().getName()).value(record.getValue())
